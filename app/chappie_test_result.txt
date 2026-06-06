@@ -1,0 +1,501 @@
+--- START TEST PELISPOP DETAIL CHAPPIE ---
+Search size: 1
+Found: Ver Chappie (2015) online en HD - Película completa -> https://pelispop.mov/pelicula/chappie
+Detail title: Ver Chappie (2015) Online - PelisPop
+Chapters count: 1
+Chapter 0 url: https://pelispop.mov/pelicula/chappie
+Cap detail title: 
+Cap detail embed urls (2):
+  Embed URL: https://pelispop.mov/vidurl/tt1823672/
+    -> Resolved: https://pelispop.mov/vidurl/tt1823672/
+=== HTML for https://pelispop.mov/vidurl/tt1823672/ ===
+<body>
+
+    <div class="decryption-loader" id="decryptionLoader">
+        <div class="loader-content">
+            <div class="spinner"></div>
+            <div class="loader-text">Obteniendo Enlaces por favor Espera un segundo</div>
+            <div class="loader-subtext" id="decryptionProgress">Descifrando servidores disponibles...</div>
+        </div>
+    </div>
+
+    <div id="modal" class="modal-vast" style="display: none;">
+        <div class="modal-content-vast">
+            <video id="videoPlayer" playsinline controlsList="nodownload noplaybackrate" style="width: 100%; height: auto;">
+                <source src="" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <button id="skipCountdown" class="skip-button" style="display: none;">Saltar</button>
+        </div>
+    </div>
+
+    <div class="server-toast" id="serverToast">
+        <span class="server-toast-icon" id="serverToastIcon">⚠️</span>
+        <div class="server-toast-content" id="serverToastContent"></div>
+        <button class="server-toast-close" id="serverToastClose" aria-label="Cerrar">×</button>
+        <div class="server-toast-progress" id="serverToastProgress"></div>
+    </div>
+
+    <div id="DisplayContent">
+        <div id="PlayerDisplay">
+            <div class="player-bg" id="playerBg" style="display:none;"></div>
+
+            <article class="fake-player-container" id="fakePlayer" itemscope itemtype="https://schema.org/VideoObject">
+                <meta itemprop="name" content="Chappie">
+                <meta itemprop="description" content="Every child comes into the world full of promise, and none more so than Chappie: he is gifted, special, a prodigy. Like any child, Chappie will come under the influence of his surroundings—some good, some bad—and he will rely on his heart and soul to find his way in the world and become his own man. But there&#039;s one thing that makes Chappie different from any one else: he is a robot.">
+                                <meta itemprop="identifier" content="tt1823672">
+                                                <meta itemprop="thumbnailUrl" content="https://image.tmdb.org/t/p/original/3pKIcv6KhUE35jsKnv3MylQ3OT2.jpg">
+                <link itemprop="contentUrl" href="/f/tt1823672/">
+                                <meta itemprop="uploadDate" content="2026-06-02T22:53:15+08:00">
+
+                <div class="video-title-overlay">
+                    <h1 itemprop="name">
+                        <span class="watching-label">Estás viendo:</span>
+                        <span class="video-name">Chappie</span>
+                    </h1>
+                    <p itemprop="description">
+                        <span class="language-flags">
+                                                        <img src="https://embed69.org/static/lang/LAT.png" 
+                                 alt="LAT" 
+                                 title="LAT">
+                                                        <img src="https://embed69.org/static/lang/ESP.png" 
+                                 alt="ESP" 
+                                 title="ESP">
+                                                        <img src="https://embed69.org/static/lang/SUB.png" 
+                                 alt="SUB" 
+                                 title="SUB">
+                                                    </span>
+                        •
+                        <span class="online-badge">Online</span>
+                        •
+                        <span class="server-count" id="serverCountDisplay">
+                            12 Servidores
+                        </span>
+                    </p>
+                </div>
+
+                <button 
+                    class="play-button-overlay" 
+                    onclick="showPlayerInterface()" 
+                    aria-label="Play video - Chappie"
+                    role="button"
+                    tabindex="0"
+                    onkeypress="if(event.key==='Enter'||event.key===' ')showPlayerInterface()">
+                    <div class="play-button-circle" aria-hidden="true">
+                        <i class="fa-solid fa-play"></i>
+                    </div>
+                </button>
+            </article>
+
+            <div class="floating-selectors" id="floatingSelectors" style="display:none;">
+                <div style="position:relative;" id="langSelectorWrap">
+                    <button class="selector-btn" id="langSelectorBtn" aria-label="Seleccionar idioma">
+                        <img id="langBtnFlag" src="https://embed69.org/static/lang/LAT.png" alt="lang">
+                        <span id="langBtnText">LAT</span>
+                        <i class="fas fa-chevron-down" style="font-size:10px;opacity:0.7;"></i>
+                    </button>
+                    <div class="selector-dropdown" id="langDropdown"></div>
+                </div>
+
+                <div style="position:relative;" id="serverSelectorWrap">
+                    <button class="selector-btn" id="serverSelectorBtn" aria-label="Seleccionar servidor">
+                        <i class="fas fa-server"></i>
+                        <span id="serverBtnText">Servidor</span>
+                        <i class="fas fa-chevron-down" style="font-size:10px;opacity:0.7;"></i>
+                    </button>
+                    <div class="selector-dropdown" id="serverDropdown"></div>
+                </div>
+            </div>
+
+            <div class="tutorial-overlay" id="tutorialOverlay">
+                <div class="tutorial-backdrop" id="tutorialBackdrop"></div>
+                <div class="tutorial-tooltip" id="tutorialTooltip">
+                    <div class="tutorial-arrow"></div>
+                    <div class="tutorial-step-indicator" id="tutorialDots"></div>
+                    <div class="tutorial-title" id="tutorialTitle"></div>
+                    <div class="tutorial-text" id="tutorialText"></div>
+                    <div class="tutorial-actions">
+                        <button class="tutorial-btn tutorial-btn-skip" id="tutorialSkip">Omitir</button>
+                        <button class="tutorial-btn tutorial-btn-next" id="tutorialNext">Siguiente</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="download-panel" id="downloadPanel">
+                <div class="download-panel-header">
+                    <h2><i class="fas fa-download"></i> Descargar</h2>
+                    <p>Selecciona un servidor para descargar</p>
+                </div>
+                <div class="download-grid" id="downloadGrid"></div>
+                <button class="download-panel-close" id="downloadPanelClose">
+                    <i class="fas fa-arrow-left"></i> Volver al reproductor
+                </button>
+            </div>
+
+            <div class="download-countdown" id="downloadCountdown">
+                <div class="download-countdown-circle">
+                    <svg viewBox="0 0 100 100" width="80" height="80">
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="6"/>
+                        <circle id="downloadProgressCircle" cx="50" cy="50" r="45" fill="none" stroke="#1caddd" stroke-width="6" stroke-dasharray="283" stroke-dashoffset="283" stroke-linecap="round" transform="rotate(-90 50 50)"/>
+                    </svg>
+                    <div class="download-countdown-number" id="downloadCountdownNum">5</div>
+                </div>
+                <div class="download-countdown-text" id="downloadCountdownText">Preparando descarga...</div>
+                <div class="download-countdown-server" id="downloadCountdownServer"></div>
+                <a class="download-go-btn" id="downloadGoBtn" target="_blank" rel="noopener noreferrer">
+                    <i class="fas fa-download"></i> Descargar ahora
+                </a>
+            </div>
+
+            <section class="iframe-container" id="iframeContainer" role="region" aria-label="Video player">
+                <iframe 
+                    id="iframePlayer" 
+                    frameborder="0" 
+                    allowfullscreen 
+                    title="Video player iframe"
+                    loading="lazy"></iframe>
+            </section>
+        </div>
+    </div>
+
+    <script>
+    const POW_CHALLENGE = 'a5a81ee2317066e5ad854ab105d3e94c';
+    const POW_DIFFICULTY = 3;
+    const POW_SALT = '6d07665b9850a0db';
+
+    (function(){
+        let suspect = 0;
+        if(navigator.webdriver) suspect += 3;
+        if(!window.chrome && /Chrome/.test(navigator.userAgent)) suspect += 2;
+        if(navigator.plugins.length === 0 && !/Mobile/.test(navigator.userAgent)) suspect += 1;
+        if(navigator.languages.length === 0) suspect += 2;
+        if(window.outerWidth === 0 && window.outerHeight === 0) suspect += 2;
+        if(suspect >= 4) {
+            document.documentElement.innerHTML = '<body style="background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">Access denied</body>';
+            throw new Error('blocked');
+        }
+    })();
+
+    function showDecryptionLoader() {
+        const loader = document.getElementById('decryptionLoader');
+        if (loader) loader.style.display = 'flex';
+    }
+
+    function hideDecryptionLoader() {
+        const loader = document.getElementById('decryptionLoader');
+        if (loader) loader.style.display = 'none';
+    }
+
+    function updateDecryptionProgress(current, total) {
+        const progressText = document.getElementById('decryptionProgress');
+        if (progressText) {
+            progressText.textContent = `Descifrando enlaces... ${current}/${total}`;
+        }
+    }
+
+    let dataLink = [{"file_id":42215,"video_language":"LAT","sortedEmbeds":[{"servername":"vidhide","link":"8F8I69R1qCioGrUuXnZY4orXkxy1n5bl4RhQVw+mK65o2Ng0bN2Dnn4r6K38QK43ZXL0k3b02rqbCv4UQ6YGxA==","type":"video"},{"servername":"streamwish","link":"pUjdSQGf70O8sLEbIo3w9M75o9Yx7jL8zr65sUzKVDTNPCyArVsztEKU8xOBtdxAZvhXTh8zCb6UNFrjjmsbWw==","type":"video"},{"servername":"filemoon","link":"g\/SRitcsh4DnLHNh7T1Oya4DaU3G1isPqu1gudH385oPc5YdVuJzep1p3fPnCMkaLSMdKfJflhJRnUiSYP5VCw==","type":"video"},{"servername":"voe","link":"pOuyqfmiSzpUAb8uqd+wUjUWOlqRaQFUk3hdJbWP1rZ\/2EpsYPAkHBETHA8k\/ymv","type":"video"}],"downloadEmbeds":[{"servername":"voe","link":"4p71sRI\/C08uEciTCNdtFmzIl8CNGZNy+kzeG\/dFTSLH6wAfgIZ4uTKsOxcf61hO6B7d4hZJpVb68ov2MnaCuQ==","type":"download"},{"servername":"filemoon","link":"1SYk\/KQX+zpVFWILVON8VrM6OzpgtYoeo19AgMnNmztDqHPp4GsMBlUzJ3ZWMu9c0UUyHq6\/pnxTysDaRKPIUw==","type":"download"},{"servername":"vidhide","link":"yx+OUThcNBq8LjDhy5Yyv1XHY032c79GcB9tmG3Q4TPiEMMqSW4T1kGbtPKsSjR5+atNZQ7547JW+wdV8GJNJw==","type":"download"},{"servername":"streamwish","link":"lPIHroaoFeU+meK3r11LqLeV3XXw99dqBUJ8\/ZPGxQGae8T5b3ZPs61Rbk7a+hpI18A5xXUisoDrVUadwGWyzg==","type":"download"},{"servername":"rapidvideo","link":"RoxYy\/OEBtS5LzXBfPdBK628qIoqkSWNOXvNXIcYDh2pjoKw8c45agcIDdgj3fByp7D5ItKuhHdZcrRduvku6Q==","type":"download"}]},{"file_id":42199,"video_language":"ESP","sortedEmbeds":[{"servername":"vidhide","link":"\/lFZJy5Pyp6mbzS17A1ZqbW8pGzjvO8YmHbO0CYr+g4J02QcoTHajcckzXSIGSNLU8n6v2q+7SwBux4o\/pmQIA==","type":"video"},{"servername":"streamwish","link":"+YCmSFKLDu8Qnua65iq85htgyoBjlmRQsxGEmEY55sLQ4HkXLU0r0jLu3YrbK+jBDZRSeI6Rta6bg4MNq1JXWA==","type":"video"},{"servername":"filemoon","link":"F57QXCBVgtWvkKeIo3OEzRWpP74z99EE3LYTMeJN6Mp5PPW1nCqzOBt0McWyA0GwVbnEMhqBg4f89n9xiwL5EQ==","type":"video"},{"servername":"voe","link":"CDgbG4uFWMIli\/W1lictEiXt9uyo24uSbJ9IyGDfgy2K4XE8i9pLTWTXJ9Ydb1rU","type":"video"}],"downloadEmbeds":[{"servername":"voe","link":"Q534IkIpure3VJj02jr0M00G9SEr7IvjXok5+Gd2UHdy2UNu4wr+UZUhOS1JGYwjWEkP2N9+G\/xA\/iW3U64UIA==","type":"download"},{"servername":"filemoon","link":"Uq7YePM4SVtL9t88u0hS2dVDhTsaGxop\/algBWtrmrtvHDXxLtu1owBnVvjnBn6xBgyX1esbEhB503NKT+0wPQ==","type":"download"},{"servername":"vidhide","link":"cwtWKALDdRWUspkfZFvsmKEFJpTcy6cPB4+xrZ2PdWPg04BL\/dsP8Dw7Z6C0zQQcP9DBAw2e6G0MstQ\/t6SzYg==","type":"download"},{"servername":"streamwish","link":"NbTAnKOy6Pmxr7xMED9jRomjIHGdsSGWAlW7EjuMA3RrlKILJXVY6NA+zdU1+f+gi7e3trkYWs1+fKt+kUdCxw==","type":"download"},{"servername":"rapidvideo","link":"+PP2m3CLLl8j46QlHK8T\/cRxGZzflM8HHuPp86+vECOFLEbZb13jHes9QXLC39zT38tEVLNKpuu1yMMptajkXQ==","type":"download"}]},{"file_id":42216,"video_language":"SUB","sortedEmbeds":[{"servername":"vidhide","link":"24W7wDJdPgiCZJJ1OjjftsGXUIkp3OLWS\/VMGWDcLRrYknqh1hKL64ovKYIh9eovPCOHEZqkKjGh9wC2e85tzw==","type":"video"},{"servername":"streamwish","link":"xl96e4m\/\/G66y2e95HaEzD\/s2Iw4aNFQeRUqezTM8vv5QyqOAzhPYHV+\/jS9cFpndan5VqHxcAKsuIwAggcVIQ==","type":"video"},{"servername":"filemoon","link":"Aa8sezbJyWKBEv7GdOyrAD8g4GpHWS+QE+TQ9\/eb0MydQ4JxfH32MLG4\/\/oTPRSQVaXULIVP2rVPNlYYiFlZog==","type":"video"},{"servername":"voe","link":"O6lLkgEjy7cJrVOtHlyQ2WOZih0Lb3srzYkrNpW+WXoDOMQPBbQZZsLq15lwn4lt","type":"video"}],"downloadEmbeds":[{"servername":"voe","link":"QY0JQmm4xBCc9igUNVIRnq0UQwqFJdNG2xfQRYlJOu5x+UYbAohCZnVTWDCuFt+ChkmYbjQLFefeLhNMz3gx5Q==","type":"download"},{"servername":"vidhide","link":"e0fvQqkeAWz\/512i8z74ebT2UvpcvGjvC8ysZwPFVYKAAeaM73vuf2Z4bmvYf3jEldKeKdL0SQHJu6CONYU8Rg==","type":"download"},{"servername":"filemoon","link":"6e2kQWj7zk7UPFPGeh0sGmdeUZHE1ntVzWZ3QWCoh53\/exGQa\/cxLPHQia64VCa2zAPc+2k86+hzHCnLBGg\/IQ==","type":"download"},{"servername":"streamwish","link":"vDgcLCzOA97KU3AHnvXA30I\/DDpmJUrXHTx0T9wPqPa\/l4a1Dxk7FH1SY1RXDcX+BDvT65ay+PaKIwO6M0rGCQ==","type":"download"},{"servername":"rapidvideo","link":"fS7FlHlEWgPxnJ8hlC+zPMPgh4FCTs8zaKsIVtONjbPucMNVD1RwCvKN91S3dMdPYAjgBvIkuzX6SO9AlvEyFQ==","type":"download"}]}];
+    let currentLanguageServers = [];
+    let currentLangIndex = 0;
+    let powSolved = false;
+    let aesKeyBytes = null;
+
+    const powWorkerCode = `
+        self.onmessage = async function(ev) {
+            const { challenge, difficulty, salt } = ev.data;
+            const prefix = '0'.repeat(difficulty);
+            let nonce = 0;
+            
+            async function sha256(str) {
+                const buf = new TextEncoder().encode(str);
+                const hash = await crypto.subtle.digest('SHA-256', buf);
+                return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+            }
+            
+            const batchSize = 5000;
+            while(true) {
+                for(let i = 0; i < batchSize; i++) {
+                    const hash = await sha256(challenge + nonce);
+                    if(hash.startsWith(prefix)) {
+                        const keyHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(challenge + nonce + salt));
+                        self.postMessage({ done: true, nonce: nonce, aesKey: new Uint8Array(keyHash) });
+                        return;
+                    }
+                    nonce++;
+                }
+                self.postMessage({ progress: true, nonce: nonce });
+            }
+        };
+    `;
+
+    async function decryptAES(encryptedBase64, aesKey) {
+        try {
+            const raw = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+            const iv = raw.slice(0, 16);
+            const ciphertext = raw.slice(16);
+            const key = await crypto.subtle.importKey('raw', aesKey.slice(0, 32), { name: 'AES-CBC' }, false, ['decrypt']);
+            const decrypted = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: iv }, key, ciphertext);
+            return new TextDecoder().decode(decrypted);
+        } catch(e) {
+            return null;
+        }
+    }
+
+    async function solvePoWAndDecrypt() {
+        showDecryptionLoader();
+        updateDecryptionProgress(0, 1);
+
+        return new Promise((resolve) => {
+            const wBlob = new Blob([powWorkerCode], { type: 'application/javascript' });
+            const wUrl = URL.createObjectURL(wBlob);
+            const worker = new Worker(wUrl);
+            URL.revokeObjectURL(wUrl);
+
+            worker.onmessage = async function(ev) {
+                const d = ev.data;
+                if(d.progress) {
+                } else if(d.done) {
+                    worker.terminate();
+                    aesKeyBytes = d.aesKey;
+                    powSolved = true;
+
+                    await decryptAllLinksLocal();
+                    hideDecryptionLoader();
+
+                    if (pendingFirstLoad) {
+                        pendingFirstLoad = false;
+                        showTabContent(0);
+                        if (currentLanguageServers.length > 0) {
+                            const firstServer = getServerInfo(currentLanguageServers[0]);
+                            showServerToast(firstServer.name);
+                        }
+                    }
+
+                    resolve();
+                }
+            };
+
+            worker.postMessage({
+                challenge: POW_CHALLENGE,
+                difficulty: POW_DIFFICULTY,
+                salt: POW_SALT
+            });
+        });
+    }
+
+    async function decryptAllLinksLocal() {
+        if (!Array.isArray(dataLink) || dataLink.length === 0) return;
+
+        let total = 0;
+        dataLink.forEach(file => {
+            if(file.sortedEmbeds) total += file.sortedEmbeds.length;
+            if(file.downloadEmbeds) total += file.downloadEmbeds.length;
+        });
+
+        let done = 0;
+        updateDecryptionProgress(0, total);
+
+        for(let fi = 0; fi < dataLink.length; fi++) {
+            const file = dataLink[fi];
+            if(file.sortedEmbeds) {
+                for(let ei = 0; ei < file.sortedEmbeds.length; ei++) {
+                    const embed = file.sortedEmbeds[ei];
+                    if(embed.link && typeof embed.link === 'string') {
+                        const decrypted = await decryptAES(embed.link, aesKeyBytes);
+                        if(decrypted) dataLink[fi].sortedEmbeds[ei].link = decrypted;
+                    }
+                    done++;
+                    updateDecryptionProgress(done, total);
+                }
+            }
+            if(file.downloadEmbeds) {
+                for(let ei = 0; ei < file.downloadEmbeds.length; ei++) {
+                    const embed = file.downloadEmbeds[ei];
+                    if(embed.link && typeof embed.link === 'string') {
+                        const decrypted = await decryptAES(embed.link, aesKeyBytes);
+                        if(decrypted) dataLink[fi].downloadEmbeds[ei].link = decrypted;
+                    }
+                    done++;
+                    updateDecryptionProgress(done, total);
+                }
+            }
+        }
+    }
+
+    const serverNames = {
+        'voe': 'Voe',
+        'filemoon': 'Filemoon',
+        'doodstream': 'Doodstream',
+        'streamwish': 'Streamwish',
+        'vidhide': 'Vidhide',
+        'rapidvideo': 'Rapidvideo',
+        'download': 'Download'
+    };
+
+    function getServerInfo(server) {
+        let name = server.servername === 'streamingembed' ? 'vip' : server.servername;
+        let serverLink = server.link;
+        if (typeof serverLink === 'object' && serverLink.link) {
+            serverLink = serverLink.link;
+        }
+        if (typeof serverLink === 'string') {
+            serverLink = serverLink.replace(/`/g, '').trim();
+        }
+        return {
+            link: serverLink,
+            icono: `${name}.ico`,
+            name: serverNames[name] || name.charAt(0).toUpperCase() + name.slice(1),
+            fullName: serverNames[name] || name.charAt(0).toUpperCase() + name.slice(1)
+        };
+    }
+
+    const langMap = {
+        'lat': 'LATINO',
+        'esp': 'CASTELLANO',
+        'sub': 'SUBTITULADO',
+        'vose': 'SUBTITULADO',
+        'jap': 'JAPONES SUB',
+        'kor': 'KOREA SUB'
+    };
+
+    const langMapShort = {
+        'lat': 'LAT',
+        'esp': 'ESP',
+        'sub': 'SUB',
+        'vose': 'VOSE',
+        'jap': 'JAP',
+        'kor': 'KOR'
+    };
+
+    let pendingFirstLoad = false;
+
+    function showPlayerInterface() {
+        document.getElementById('fakePlayer').style.display = 'none';
+        document.getElementById('playerBg').style.display = 'block';
+        document.getElementById('floatingSelectors').style.display = 'flex';
+
+        buildLanguageDropdown();
+
+        if (dataLink.length > 0 && dataLink[0].sortedEmbeds) {
+            currentLangIndex = 0;
+            currentLanguageServers = dataLink[0].sortedEmbeds;
+            buildServerDropdown();
+
+            if (powSolved) {
+                showTabContent(0);
+                const firstServer = getServerInfo(currentLanguageServers[0]);
+                showServerToast(firstServer.name);
+            } else {
+                pendingFirstLoad = true;
+            }
+        }
+
+        setTimeout(() => startTutorial(), 800);
+    }
+
+    function buildLanguageDropdown() {
+        const dropdown = document.getElementById('langDropdown');
+        dropdown.innerHTML = '';
+
+        dataLink.forEach((file, index) => {
+            const option = document.createElement('button');
+            option.className = `dropdown-option ${index === 0 ? 'active' : ''}`;
+            option.dataset.index = index;
+
+            const flag = document.createElement('img');
+            flag.src = `https://embed69.org/static/lang/${file.video_language}.png`;
+            flag.alt = file.video_language;
+            option.appendChild(flag);
+
+            const text = document.createElement('span');
+            text.textContent = langMap[(file.video_language || '').toLowerCase()] || file.video_language.toUpperCase();
+            option.appendChild(text);
+
+            option.onclick = () => changeLanguage(index);
+            dropdown.appendChild(option);
+        });
+    }
+
+    function buildServerDropdown() {
+        const dropdown = document.getElementById('serverDropdown');
+        dropdown.innerHTML = '';
+
+        currentLanguageServers.forEach((server, index) => {
+            const serverInfo = getServerInfo(server);
+            const option = document.createElement('button');
+            option.className = `dropdown-option ${index === 0 ? 'active' : ''}`;
+            option.dataset.index = index;
+
+            const icon = document.createElement('img');
+            icon.src = `https://embed69.org/static/server/${serverInfo.icono}`;
+            icon.alt = serverInfo.name;
+            icon.className = 'server-icon';
+            option.appendChild(icon);
+
+            const text = document.createElement('span');
+            text.textContent = serverInfo.fullName;
+            option.appendChild(text);
+
+            option.onclick = () => selectServer(index);
+            dropdown.appendChild(option);
+        });
+
+        const file = dataLink[currentLangIndex];
+        if (file && file.downloadEmbeds && file.downloadEmbeds.length > 0) {
+            const dlOption = document.createElement('button');
+            dlOption.className = 'dropdown-option';
+            dlOption.style.borderTop = '1px solid rgba(255,255,255,0.1)';
+
+            const dlIcon = document.createElement('i');
+            dlIcon.className = 'fas fa-download';
+            dlIcon.style.fontSize = '16px';
+            dlIcon.style.width = '20px';
+            dlIcon.style.textAlign = 'center';
+            dlOption.appendChild(dlIcon);
+
+            const dlText = document.createElement('span');
+            dlText.textContent = 'Descargar';
+            dlText.style.color = '#4ade80';
+            dlOption.appendChild(dlText);
+
+            dlOption.onclick = () => {
+                document.getElementById('serverDropdown').classList.remove('open');
+                showDownloadPanel();
+            };
+            dropdown.appendChild(dlOption);
+        }
+
+        if (currentLanguageServers.length > 0) {
+            const first = getServerInfo(currentLanguageServers[0]);
+            document.getElementById('serverBtnText').textContent = first.fullName;
+        }
+    }
+
+    function changeLanguage(index) {
+        currentLangIndex = index;
+        const file = dataLink[index];
+
+        document.getElementById('langBtnFlag').src = `https://embed69.org/static/lang/${file.video_language}.png`;
+        document.getElementById('langBtnText').textContent = langMapShort[(file.video_language || '').toLowerCase()] || file.video_language.toUpperCase();
+
+        document.querySelectorAll('#langDropdown .dropdown-option').forEach((opt, i) => {
+            opt.classList.toggle('active', i === index);
+        });
+
+        document.getElementById('langDropdown').classList.remove('open');
+
+        if (file.sortedEmbeds) {
+            currentLanguageServers = file.sortedEmbeds;
+            buildServerDropdown();
+            showTabContent(0);
+            const firstServer = getServerInfo(currentLanguageServers[0]);
+            showServerToast(firstServer.name);
+        }
+    }
+
+    function selectServer(index) {
+        const serverInfo = getServerInfo(currentLanguageServers[index]);
+
+        document.getElementBy
+=======================
+  Embed URL: https://xupalace.org/uqlink.php?id=lng6xil6gce8
+    -> Resolved: https://uqload.io/embed-lng6xil6gce8.html

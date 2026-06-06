@@ -1,0 +1,8 @@
+{
+  "name": "BTv 2 junio 26 8:54 pm",
+  "description": "Fast 4K IPTV player for Android TV featuring global search, cloud synchronization, and seamless management of multiple M3U lists.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

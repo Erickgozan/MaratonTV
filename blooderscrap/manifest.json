@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Blooderscrap",
+  "version": "1.0",
+  "description": "Navega SeriesMetro cómodamente y transmite los enlaces directos a tu app BloodersTV.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": [
+    "https://www3.seriesmetro.net/*",
+    "http://*:9999/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www3.seriesmetro.net/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}
