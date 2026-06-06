@@ -2023,7 +2023,7 @@ private fun injectAdBlockScript(webView: android.webkit.WebView?) {
 private fun injectChromeExtensions(webView: android.webkit.WebView?, url: String?) {
     if (webView == null || url == null) return
     val context = webView.context ?: return
-    val extensions = com.maratonTv.data.ChromeExtensionManager.getExtensions(context)
+    val extensions = com.maratonTv.service.manager.ChromeExtensionManager.getExtensions(context)
     val activeExtensions = extensions.filter { ext ->
         ext.isEnabled && ext.matches.any { pattern ->
             val regexPattern = pattern.replace(".", "\\.")

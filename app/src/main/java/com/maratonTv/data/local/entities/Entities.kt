@@ -1,4 +1,4 @@
-package com.maratonTv.data
+package com.maratonTv.data.local.entities
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

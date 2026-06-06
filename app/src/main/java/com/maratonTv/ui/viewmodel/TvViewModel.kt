@@ -1,11 +1,18 @@
-package com.maratonTv.ui
+package com.maratonTv.ui.viewmodel
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.maratonTv.data.*
+import com.maratonTv.data.local.entities.*
+import com.maratonTv.data.model.*
+import com.maratonTv.data.remote.scrapers.*
+import com.maratonTv.data.remote.parsers.*
+import com.maratonTv.data.repository.*
+import com.maratonTv.service.extension.ExtensionServer
+import com.maratonTv.service.manager.ChromeExtension
+import com.maratonTv.service.manager.ChromeExtensionManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
@@ -14,136 +21,12 @@ import kotlinx.coroutines.coroutineScope
 import okhttp3.Request
 import org.json.JSONObject
 import org.json.JSONArray
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.net.ServerSocket
-import java.net.Socket
-
-data class SeriesEpisodeInfo(
-    val seriesName: String,
-    val season: Int,
-    val episode: Int
-)
-
-data class NavigationState(
-    val screen: String,
-    val selectedChannel: UiChannel?,
-    val playingChannel: UiChannel?,
-    val activeStreamUrl: String,
-    val selectedSeason: Int,
-    val selectedEpisodeNum: Int,
-    val seriesEpisodes: List<UiChannel>,
-    val isPlayerMaximized: Boolean
-)
-
-private val seriesRegex = "(?i)(S[0-9]+|T[0-9]+|E[0-9]+|TEMPORADA\\s*[0-9]+|CAPITULO\\s*[0-9]+|[0-9]+x[0-9]+|CAP\\.?\\s*[0-9]+|EP\\.?\\s*[0-9]+)".toRegex()
-private val sxeRegex = "(?i)(?:S|T|TEM|TEMPORADA)\\s*([0-9]+)\\s*(?:-|\\*|E|EP|EPISODIO|C|CAP|CAPITULO)?\\s*(?:E|EP|EPISODIO|C|CAP|CAPITULO)?\\s*([0-9]+)".toRegex()
-private val xRegex = "([0-9]+)x([0-9]+)".toRegex()
-private val capEpRegex = "(?i)(?:CAP|EP|CAPITULO|EPISODIO)\\.?\\s*([0-9]+)".toRegex()
-private val seasonOnlyRegex = "(?i)(?:TEMPORADA|TEM|SEASON)\\s*([0-9]+)".toRegex()
-private val tempSeasonRegex = "(?i)(?:TEM|TEMP|SEASON)\\s*([0-9]+)".toRegex()
-private val numMatchRegex = "([0-9]+)$".toRegex()
-private val backTemRegex = "(?i)\\*back-tem".toRegex()
-private val temRegex = "(?i)\\*tem".toRegex()
-private val endCharsRegex = "[:\\-*\\s]+$".toRegex()
-
-private val parseSeriesEpisodeCache = android.util.LruCache<String, SeriesEpisodeInfo>(2000)
-private val NOT_A_SERIES = SeriesEpisodeInfo("", -1, -1)
-
-fun parseSeriesEpisode(channel: UiChannel): SeriesEpisodeInfo? {
-    val cacheKey = channel.name + "||" + channel.groupTitle
-    val cached = parseSeriesEpisodeCache.get(cacheKey)
-    if (cached != null) {
-        return if (cached === NOT_A_SERIES) null else cached
-    }
-    
-    val res = parseSeriesEpisodeUncached(channel)
-    parseSeriesEpisodeCache.put(cacheKey, res ?: NOT_A_SERIES)
-    return res
-}
-
-fun parseSeriesEpisodeUncached(channel: UiChannel): SeriesEpisodeInfo? {
-    val name = channel.name.trim()
-    val group = channel.groupTitle.uppercase()
-    
-    if (channel.originalGroup == "BLOODERSCRAP_EP") {
-        val numMatch = numMatchRegex.find(name) ?: capEpRegex.find(name)
-        val epNum = numMatch?.groupValues?.get(1)?.toIntOrNull() ?: 1
-        val seriesNameValue = if (channel.director.isNotEmpty() && channel.director != "Blooderscrap" && channel.director != "Blooders Creator" && channel.director != "BloodersTv") {
-            channel.director
-        } else {
-            "BloodersTv"
-        }
-        return SeriesEpisodeInfo(seriesNameValue, 1, epNum)
-    }
-    
-    // Determine if it is a Series: if group is SERIES or name has series patterns
-    val isSeriesCategory = group.contains("SERIE")
-    val hasSeriesMarker = seriesRegex.containsMatchIn(name)
-    
-    if (!isSeriesCategory && !hasSeriesMarker) return null
-    
-    var season = 1
-    var episode = 1
-    var seriesName = name
-    
-    val mSxe = sxeRegex.find(name)
-    val mX = xRegex.find(name)
-    val mCapEp = capEpRegex.find(name)
-    val mSeasonOnly = seasonOnlyRegex.find(name)
-    
-    if (mSxe != null) {
-        season = mSxe.groupValues[1].toIntOrNull() ?: 1
-        episode = mSxe.groupValues[2].toIntOrNull() ?: 1
-        seriesName = name.substring(0, mSxe.range.first).trim()
-    } else if (mX != null) {
-        season = mX.groupValues[1].toIntOrNull() ?: 1
-        episode = mX.groupValues[2].toIntOrNull() ?: 1
-        seriesName = name.substring(0, mX.range.first).trim()
-    } else if (mCapEp != null) {
-        val seasonMatch = tempSeasonRegex.find(name)
-        if (seasonMatch != null) {
-            season = seasonMatch.groupValues[1].toIntOrNull() ?: 1
-        }
-        episode = mCapEp.groupValues[1].toIntOrNull() ?: 1
-        seriesName = name.substring(0, mCapEp.range.first).trim()
-    } else if (mSeasonOnly != null) {
-        season = mSeasonOnly.groupValues[1].toIntOrNull() ?: 1
-        val numMatch = numMatchRegex.find(name)
-        if (numMatch != null) {
-            episode = numMatch.groupValues[1].toIntOrNull() ?: 1
-        }
-        seriesName = name.substring(0, mSeasonOnly.range.first).trim()
-    } else {
-        val numMatch = numMatchRegex.find(name)
-        if (numMatch != null) {
-            episode = numMatch.groupValues[1].toIntOrNull() ?: 1
-            seriesName = name.substring(0, numMatch.range.first).trim()
-        } else {
-            // No numerical markers found, but this is categorized under SERIES.
-            // Treat as Season 1, Episode 1 of itself.
-            season = 1
-            episode = 1
-            seriesName = name
-        }
-    }
-    
-    seriesName = seriesName
-        .replace(backTemRegex, "")
-        .replace(temRegex, "")
-        .replace(endCharsRegex, "")
-        .trim()
-        
-    if (seriesName.isEmpty()) {
-        seriesName = name
-    }
-    
-    return SeriesEpisodeInfo(seriesName, season, episode)
-}
 
 class TvViewModel(
     application: Application,
-    private val repository: TvRepository
+    private val repository: TvRepository,
+    private val metadataRepository: MediaMetadataRepository,
+    private val scraperRepository: ScraperRepository
 ) : AndroidViewModel(application) {
 
     private val _navigationHistory = java.util.Stack<NavigationState>()
@@ -255,6 +138,8 @@ class TvViewModel(
 
     private val _lastHeartbeat = MutableStateFlow<Long>(0L)
     val lastHeartbeat: StateFlow<Long> = _lastHeartbeat.asStateFlow()
+
+    private var extensionServer: ExtensionServer? = null
 
     // --- Autonomous Scrapper Integration ---
     private val _blooderscrapIntegrado = MutableStateFlow(prefs.getBoolean("blooderscrap_integrado", true))
@@ -382,19 +267,6 @@ class TvViewModel(
     private val _selectedChannel = MutableStateFlow<UiChannel?>(null)
     val selectedChannel: StateFlow<UiChannel?> = _selectedChannel.asStateFlow()
 
-    // Dynamic IMDb Details state
-    data class ImdbDetails(
-        val synopsis: String,
-        val rating: String,
-        val year: String,
-        val director: String,
-        val actors: String,
-        val trailerUrl: String,
-        val sourceUsed: String, // "YOUTUBE" or "IMDb" or "TMDB"
-        val posterUrl: String = "",
-        val backdropUrl: String = ""
-    )
-
     private val _tmdbApiKey = MutableStateFlow(
         prefs.getString("tmdb_api_key", "ba8a6b2302e1b1062b1bdfac4f7396a8") ?: "ba8a6b2302e1b1062b1bdfac4f7396a8"
     )
@@ -410,44 +282,6 @@ class TvViewModel(
 
     private val _isLoadingImdb = MutableStateFlow(false)
     val isLoadingImdb: StateFlow<Boolean> = _isLoadingImdb.asStateFlow()
-
-    private val okHttpClient = repository.okHttpClient
-    private val imdbCache = android.util.LruCache<String, ImdbDetails>(500)
-
-    private fun htmlDecode(input: String): String {
-        return input
-            .replace("&quot;", "\"")
-            .replace("&#39;", "'")
-            .replace("&amp;", "&")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("\\u0022", "\"")
-            .replace("\\u0027", "'")
-    }
-
-    private fun cleanMovieNameForSearch(name: String): String {
-        var title = name.trim()
-        // Remove leading numbers or prefix channel numbers
-        title = title.replace("^\\d+\\s+".toRegex(), "")
-        title = title.replace("^🔞\\s+".toRegex(), "")
-        // Remove resolutions, formats and tags
-        val tags = listOf(
-            "1080P", "720P", "2160P", "4K", "HD", "FHD", "UHD", "BLURAY", "BDRIP", "DVDRIP", "HDRIP", "CAMRIP",
-            "H264", "H265", "HEVC", "X264", "X265", "LATINO", "CASTELLANO", "SUB", "MULTILANG", "DUAL", "SPA", "ENG"
-        )
-        for (tag in tags) {
-            title = title.replace("(?i)\\b$tag\\b".toRegex(), "")
-        }
-        // Remove season markers
-        title = title.replace("(?i)\\b(?:S[0-9]+|T[0-9]+|E[0-9]+|TEMPORADA\\s*[0-9]+|CAPITULO\\s*[0-9]+|[0-9]+x[0-9]+|CAP\\.?\\s*[0-9]+|EP\\.?\\s*[0-9]+).*$".toRegex(), "")
-        // Remove years in parenthesis or bracket
-        title = title.replace("\\([12][0-9]{3}\\)".toRegex(), "")
-        title = title.replace("\\[[12][0-9]{3}\\]".toRegex(), "")
-        title = title.replace("\\b[12][0-9]{3}\\b".toRegex(), "")
-        // Remove trailing dashes, spaces, etc.
-        title = title.replace("[:\\-*\\s]+$".toRegex(), "").trim()
-        return title
-    }
 
     // Series episodes list and selection states
     private val _seriesEpisodes = MutableStateFlow<List<UiChannel>>(emptyList())
@@ -537,318 +371,19 @@ class TvViewModel(
         _isPlayerMaximized.value = maximized
     }
 
-    private suspend fun persistImdbDetails(cleanName: String, details: ImdbDetails) {
-        try {
-            repository.saveCachedMetadata(
-                com.maratonTv.data.DbCachedMetadata(
-                    cleanName = cleanName,
-                    synopsis = details.synopsis,
-                    rating = details.rating,
-                    year = details.year,
-                    director = details.director,
-                    actors = details.actors,
-                    trailerUrl = details.trailerUrl,
-                    sourceUsed = details.sourceUsed,
-                    posterUrl = details.posterUrl,
-                    backdropUrl = details.backdropUrl
-                )
-            )
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     fun fetchImdbAndTrailerDetails(channel: UiChannel) {
-        val cleanName = cleanMovieNameForSearch(channel.name)
+        val tmdbKey = _tmdbApiKey.value
         val source = _trailerSource.value
-
-        val cached = imdbCache.get(cleanName)
-        if (cached != null) {
-            _imdbDetailsState.value = cached
-            _isLoadingImdb.value = false
-            return
-        }
-
+        
         _isLoadingImdb.value = true
         _imdbDetailsState.value = null
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            // First check persistent Room SQLite cache
             try {
-                val dbCached = repository.getCachedMetadata(cleanName)
-                if (dbCached != null) {
-                    val details = ImdbDetails(
-                        synopsis = dbCached.synopsis,
-                        rating = dbCached.rating,
-                        year = dbCached.year,
-                        director = dbCached.director,
-                        actors = dbCached.actors,
-                        trailerUrl = dbCached.trailerUrl,
-                        sourceUsed = dbCached.sourceUsed,
-                        posterUrl = dbCached.posterUrl,
-                        backdropUrl = dbCached.backdropUrl
-                    )
-                    imdbCache.put(cleanName, details)
-                    _imdbDetailsState.value = details
-                    _isLoadingImdb.value = false
-                    return@launch
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-
-            try {
-                if (source == "TMDB") {
-                    val apiKey = _tmdbApiKey.value
-                    if (apiKey.trim().isNotEmpty()) {
-                        val searchUrl = "https://api.themoviedb.org/3/search/multi?api_key=$apiKey&query=${android.net.Uri.encode(cleanName)}&language=es-ES"
-                        val request = Request.Builder()
-                            .url(searchUrl)
-                            .header("User-Agent", "Mozilla/5.0")
-                            .build()
-                        val response = okHttpClient.newCall(request).execute()
-                        if (response.isSuccessful) {
-                            val jsonStr = response.body?.string() ?: ""
-                            val jsonObj = org.json.JSONObject(jsonStr)
-                            val results = jsonObj.optJSONArray("results")
-                            if (results != null && results.length() > 0) {
-                                var bestMatch: org.json.JSONObject? = null
-                                for (i in 0 until results.length()) {
-                                    val item = results.getJSONObject(i)
-                                    val mediaType = item.optString("media_type")
-                                    if (mediaType == "movie" || mediaType == "tv") {
-                                        bestMatch = item
-                                        break
-                                    }
-                                }
-                                if (bestMatch == null) {
-                                    bestMatch = results.getJSONObject(0)
-                                }
-
-                                val mediaType = bestMatch.optString("media_type", "movie")
-                                val id = bestMatch.optInt("id")
-                                val overview = bestMatch.optString("overview")
-                                val ratingVal = bestMatch.optDouble("vote_average", 0.0)
-                                val voteStr = if (ratingVal > 0.0) String.format(java.util.Locale.US, "%.1f", ratingVal) else channel.rating
-
-                                val releaseDate = if (mediaType == "tv") bestMatch.optString("first_air_date") else bestMatch.optString("release_date")
-                                val yearStr = if (releaseDate != null && releaseDate.length >= 4) releaseDate.substring(0, 4) else channel.year
-
-                                val posterPath = bestMatch.optString("poster_path")
-                                val backdropPath = bestMatch.optString("backdrop_path")
-                                val posterUrl = if (posterPath.isNotEmpty() && posterPath != "null") "https://image.tmdb.org/t/p/w500$posterPath" else ""
-                                val backdropUrl = if (backdropPath.isNotEmpty() && backdropPath != "null") "https://image.tmdb.org/t/p/w780$backdropPath" else ""
-
-                                var director = channel.director
-                                var actors = channel.actors
-
-                                // Credits (Director & Cast)
-                                try {
-                                    val creditsUrl = "https://api.themoviedb.org/3/$mediaType/$id/credits?api_key=$apiKey&language=es-ES"
-                                    val creditsRequest = Request.Builder().url(creditsUrl).header("User-Agent", "Mozilla/5.0").build()
-                                    val creditsResponse = okHttpClient.newCall(creditsRequest).execute()
-                                    if (creditsResponse.isSuccessful) {
-                                        val creditsJson = org.json.JSONObject(creditsResponse.body?.string() ?: "")
-                                        val crew = creditsJson.optJSONArray("crew")
-                                        if (crew != null) {
-                                            val dirList = mutableListOf<String>()
-                                            for (j in 0 until crew.length()) {
-                                                val m = crew.getJSONObject(j)
-                                                if (m.optString("job").equals("Director", ignoreCase = true)) {
-                                                    dirList.add(m.optString("name"))
-                                                }
-                                            }
-                                            if (dirList.isNotEmpty()) {
-                                                director = dirList.joinToString(", ")
-                                            }
-                                        }
-                                        val cast = creditsJson.optJSONArray("cast")
-                                        if (cast != null) {
-                                            val actList = mutableListOf<String>()
-                                            val limit = minOf(cast.length(), 4)
-                                            for (j in 0 until limit) {
-                                                actList.add(cast.getJSONObject(j).optString("name"))
-                                            }
-                                            if (actList.isNotEmpty()) {
-                                                actors = actList.joinToString(", ")
-                                            }
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-
-                                // Videos for trailer
-                                var trailerUrl = ""
-                                try {
-                                    val videosUrl = "https://api.themoviedb.org/3/$mediaType/$id/videos?api_key=$apiKey&language=es-ES"
-                                    val videosRequest = Request.Builder().url(videosUrl).header("User-Agent", "Mozilla/5.0").build()
-                                    val videosResponse = okHttpClient.newCall(videosRequest).execute()
-                                    if (videosResponse.isSuccessful) {
-                                        val videosJson = org.json.JSONObject(videosResponse.body?.string() ?: "")
-                                        val videosArray = videosJson.optJSONArray("results")
-                                        if (videosArray != null) {
-                                            for (j in 0 until videosArray.length()) {
-                                                val video = videosArray.getJSONObject(j)
-                                                val site = video.optString("site")
-                                                val key = video.optString("key")
-                                                val type = video.optString("type")
-                                                if (site.equals("YouTube", ignoreCase = true)) {
-                                                    if (type.equals("Trailer", ignoreCase = true)) {
-                                                        trailerUrl = key
-                                                        break
-                                                    } else if (trailerUrl.isEmpty()) {
-                                                        trailerUrl = key
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-
-                                val details = ImdbDetails(
-                                    synopsis = if (overview.isNotEmpty()) overview else channel.synopsis,
-                                    rating = voteStr,
-                                    year = yearStr,
-                                    director = director,
-                                    actors = actors,
-                                    trailerUrl = trailerUrl,
-                                    sourceUsed = "TMDB",
-                                    posterUrl = posterUrl,
-                                    backdropUrl = backdropUrl
-                                )
-                                imdbCache.put(cleanName, details)
-                                _imdbDetailsState.value = details
-                                persistImdbDetails(cleanName, details)
-                                return@launch
-                            }
-                        }
-                    }
-                }
-
-                // Fallback to IMDb or if selected source is "IMDb" (or TMDB query yielded nothing)
-                val searchUrl = "https://www.imdb.com/find/?q=${android.net.Uri.encode(cleanName)}&s=tt"
-                val request = Request.Builder()
-                    .url(searchUrl)
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-                    .header("Accept-Language", "es-ES,es;q=0.9")
-                    .build()
-
-                var rating = channel.rating
-                var synopsis = channel.synopsis
-                var director = channel.director
-                var actors = channel.actors
-                var year = channel.year
-                var trailerUrl = ""
-
-                val response = okHttpClient.newCall(request).execute()
-                if (response.isSuccessful) {
-                    val html = response.body?.string() ?: ""
-                    
-                    // Slice HTML to find inside actual results container and avoid global navbar promos!
-                    val itemIndex = html.indexOf("ipc-metadata-list-summary-item")
-                    val subHtml = if (itemIndex != -1) {
-                        html.substring(itemIndex)
-                    } else {
-                        val frIndex = html.indexOf("findResult")
-                        if (frIndex != -1) html.substring(frIndex) else html
-                    }
-
-                    val ttMatch = "/title/(tt\\d+)".toRegex().find(subHtml) ?: "/title/(tt\\d+)".toRegex().find(html)
-                    if (ttMatch != null) {
-                        val ttId = ttMatch.groupValues[1]
-                        val titleUrl = "https://www.imdb.com/title/$ttId/"
-                        val titleRequest = Request.Builder()
-                            .url(titleUrl)
-                            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-                            .header("Accept-Language", "es-ES,es;q=0.9")
-                            .build()
-
-                        val titleResponse = okHttpClient.newCall(titleRequest).execute()
-                        if (titleResponse.isSuccessful) {
-                            val titleHtml = titleResponse.body?.string() ?: ""
-                            
-                            val ratingMatch = "\"ratingValue\":\\s*\"?([0-9.]+)\"?".toRegex().find(titleHtml)
-                                ?: "\"aggregateRating\":\\{[^\\}]*\"ratingValue\":\\s*\"?([0-9.]+)\"?".toRegex().find(titleHtml)
-                            if (ratingMatch != null) {
-                                rating = ratingMatch.groupValues[1]
-                            }
-
-                            val metaDescMatch = "<meta[^>]*property=\"og:description\"[^>]*content=\"([^\"]+)\"".toRegex().find(titleHtml)
-                                ?: "<meta[^>]*name=\"description\"[^>]*content=\"([^\"]+)\"".toRegex().find(titleHtml)
-                            if (metaDescMatch != null) {
-                                val desc = htmlDecode(metaDescMatch.groupValues[1])
-                                if (desc.isNotEmpty() && !desc.contains("IMDb", ignoreCase = true)) {
-                                    synopsis = desc
-                                }
-                            }
-
-                            val yearMatch = "\"releaseDate\":\\s*\"?([12][0-9]{3})".toRegex().find(titleHtml)
-                                ?: "<title>[^<]*\\(([12][0-9]{3})\\)".toRegex().find(titleHtml)
-                            if (yearMatch != null) {
-                                year = yearMatch.groupValues[1]
-                            }
-
-                            val directorMatch = "\"director\":\\[?\\s*\\{[^\\}]*\"name\":\\s*\"([^\"]+)\"".toRegex().find(titleHtml)
-                            if (directorMatch != null) {
-                                director = htmlDecode(directorMatch.groupValues[1])
-                            }
-                        }
-                    }
-                }
-                
-                // Smartube / Fallback mp4 trailers
-                val defaultTrailers = mapOf(
-                    "TE VAN A MATAR" to "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
-                    "THE PUNISHER" to "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-                    "JACK RYAN" to "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
-                    "THE BOYS" to "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4"
-                )
-                
-                val lowerClean = cleanName.uppercase()
-                var matchedTrailer = ""
-                for ((key, tUrl) in defaultTrailers) {
-                    if (lowerClean.contains(key)) {
-                        matchedTrailer = tUrl
-                        break
-                    }
-                }
-                if (matchedTrailer.isEmpty()) {
-                    matchedTrailer = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-                }
-                
-                trailerUrl = matchedTrailer
-
-                val details = ImdbDetails(
-                    synopsis = synopsis,
-                    rating = rating,
-                    year = year,
-                    director = director,
-                    actors = actors,
-                    trailerUrl = trailerUrl,
-                    sourceUsed = if (source == "TMDB") "TMDB" else "IMDb"
-                )
-                imdbCache.put(cleanName, details)
+                val details = metadataRepository.fetchMetadata(channel, tmdbKey, source)
                 _imdbDetailsState.value = details
-                persistImdbDetails(cleanName, details)
             } catch (e: Exception) {
                 e.printStackTrace()
-                val fallbackDetails = ImdbDetails(
-                    synopsis = channel.synopsis,
-                    rating = channel.rating,
-                    year = channel.year,
-                    director = channel.director,
-                    actors = channel.actors,
-                    trailerUrl = if (cleanName.uppercase().contains("TE VAN A MATAR")) {
-                        "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
-                    } else "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                    sourceUsed = source
-                )
-                imdbCache.put(cleanName, fallbackDetails)
-                _imdbDetailsState.value = fallbackDetails
-                persistImdbDetails(cleanName, fallbackDetails)
             } finally {
                 _isLoadingImdb.value = false
             }
@@ -909,7 +444,7 @@ class TvViewModel(
             val trailerUrl = if (currentDetails != null && channel.name == _selectedChannel.value?.name) {
                 currentDetails.trailerUrl
             } else {
-                val cleanName = cleanMovieNameForSearch(channel.name).uppercase()
+                val cleanName = metadataRepository.cleanMovieNameForSearch(channel.name).uppercase()
                 when {
                     cleanName.contains("MATAR") -> "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
                     cleanName.contains("PUNISHER") -> "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
@@ -922,7 +457,7 @@ class TvViewModel(
         } else {
             _isImdbTrailerActive.value = false
             
-            val cleanName = cleanMovieNameForSearch(channel.name)
+            val cleanName = metadataRepository.cleanMovieNameForSearch(channel.name)
             val searchQuery = "$cleanName trailer"
             
             // Try TMDB cached real youtube key if available
@@ -938,7 +473,7 @@ class TvViewModel(
             
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 if (youtubeId.isEmpty()) {
-                    val fetchedId = fetchFirstYoutubeVideoId(searchQuery)
+                    val fetchedId = metadataRepository.fetchFirstYoutubeVideoId(searchQuery)
                     if (fetchedId != null) {
                         youtubeId = fetchedId
                     }
@@ -957,8 +492,7 @@ class TvViewModel(
                     
                     // If completely failed of external players, fallback to local Player
                     if (!launched) {
-                        val fallbackId = if (youtubeId.isNotEmpty()) youtubeId else getYoutubeTvTrailerId(channel.name)
-                        _activeTrailerUrl.value = fallbackId
+                        _activeTrailerUrl.value = if (youtubeId.isNotEmpty()) youtubeId else "dQw4w9WgXcQ"
                     }
                 }
             }
@@ -1379,268 +913,14 @@ class TvViewModel(
                     _scrapedCatalogItems.value = emptyList()
                     return@collectLatest
                 }
-                
                 try {
-                    if (query.isNotEmpty()) {
-                        val scrapedSM = try { SeriesMetroScraper.scrapeSeriesList(query = query) } catch (e: Exception) { emptyList() }
-                        val scrapedPP = try { PelisPlusScraper.scrapeList(query = query) } catch (e: Exception) { emptyList() }
-                        
-                        val combined = ArrayList<UiChannel>()
-                        
-                        scrapedSM.forEach {
-                            val isSeries = it.url.contains("/serie/") || it.url.contains("/series/") || it.url.contains("/temporada/") || it.url.contains("/episodio/") || it.url.contains("/capitulo/")
-                            val isMovie = it.url.contains("/pelicula/") || it.url.contains("/movies/") || it.url.contains("/peli/")
-                            
-                            val itemGroup = if (isSeries) "SERIES" else "PELICULA"
-                            val shouldAdd = when (category) {
-                                "PELICULA" -> !isSeries
-                                "SERIES" -> isSeries
-                                else -> true
-                            }
-                            
-                            if (shouldAdd) {
-                                combined.add(UiChannel(
-                                    name = it.title,
-                                    groupTitle = itemGroup,
-                                    logoUrl = it.img.ifEmpty { "https://cdn-icons-png.flaticon.com/512/864/864383.png" },
-                                    primaryStreamUrl = it.url,
-                                    sources = listOf(ChannelSource("BloodersTv", it.url)),
-                                    synopsis = "Contenido de BloodersTv (SeriesMetro) disponible directamente.",
-                                    rating = "8.8",
-                                    year = it.year,
-                                    director = "BloodersTv",
-                                    actors = "Virtual",
-                                    isEmbedText = true,
-                                    originalGroup = "Búsqueda BloodersTv"
-                                ))
-                            }
-                        }
-
-                        scrapedPP.forEach {
-                            val isSeries = it.url.contains("/serie/") || it.url.contains("/series/") || it.url.contains("/temporada/") || it.url.contains("/episodio/") || it.url.contains("/capitulo/")
-                            val isMovie = it.url.contains("/pelicula/") || it.url.contains("/movies/") || it.url.contains("/peli/")
-                            
-                            val itemGroup = if (isSeries) "SERIES" else "PELICULA"
-                            val shouldAdd = when (category) {
-                                "PELICULA" -> !isSeries
-                                "SERIES" -> isSeries
-                                else -> true
-                            }
-                            
-                            if (shouldAdd) {
-                                combined.add(UiChannel(
-                                    name = it.title,
-                                    groupTitle = itemGroup,
-                                    logoUrl = it.img.ifEmpty { "https://cdn-icons-png.flaticon.com/512/864/864383.png" },
-                                    primaryStreamUrl = it.url,
-                                    sources = listOf(ChannelSource("Blooders2", it.url)),
-                                    synopsis = "Contenido de Blooders2 disponible directamente.",
-                                    rating = "8.9",
-                                    year = it.year,
-                                    director = "Blooders2",
-                                    actors = "Virtual",
-                                    isEmbedText = true,
-                                    originalGroup = "Búsqueda Blooders2"
-                                ))
-                            }
-                        }
-                        _scrapedCatalogItems.value = combined
-                    } else if (category == "SERIES") {
-                        val scrapedSM = try { SeriesMetroScraper.scrapeSeriesList(page = 1, categoryType = "SERIES") } catch (e: Exception) { emptyList() }
-                        val filteredSM = scrapedSM.filter {
-                            val isMovie = it.url.contains("/pelicula/") || it.url.contains("/movies/") || it.url.contains("/peli/")
-                            !isMovie
-                        }
-                        val scrapedPP = try { PelisPlusScraper.scrapeList(page = 1) } catch (e: Exception) { emptyList() }
-                        val filteredPP = scrapedPP.filter { it.url.contains("/serie/") || it.url.contains("/series/") }
-                        
-                        val combined = ArrayList<UiChannel>()
-                        filteredSM.forEach {
-                            combined.add(UiChannel(
-                                name = it.title,
-                                groupTitle = "SERIES",
-                                logoUrl = it.img.ifEmpty { "https://cdn-icons-png.flaticon.com/512/864/864383.png" },
-                                primaryStreamUrl = it.url,
-                                sources = listOf(ChannelSource("BloodersTv", it.url)),
-                                synopsis = "Contenido bajo de demanda de BloodersTv (SeriesMetro).",
-                                rating = "8.8",
-                                year = it.year,
-                                director = "BloodersTv",
-                                actors = "Virtual",
-                                isEmbedText = true,
-                                originalGroup = "BLOODERSTV_CATALOG"
-                            ))
-                        }
-                        filteredPP.forEach {
-                            combined.add(UiChannel(
-                                name = it.title,
-                                groupTitle = "SERIES",
-                                logoUrl = it.img.ifEmpty { "https://cdn-icons-png.flaticon.com/512/864/864383.png" },
-                                primaryStreamUrl = it.url,
-                                sources = listOf(ChannelSource("Blooders2", it.url)),
-                                synopsis = "Contenido de Blooders2 disponible directamente.",
-                                rating = "8.9",
-                                year = it.year,
-                                director = "Blooders2",
-                                actors = "Virtual",
-                                isEmbedText = true,
-                                originalGroup = "BLOODERSTV_CATALOG"
-                            ))
-                        }
-                        _scrapedCatalogItems.value = combined
-                    } else if (category == "PELICULA") {
-                        val scrapedSM = try { SeriesMetroScraper.scrapeSeriesList(page = 1, categoryType = "PELICULA") } catch (e: Exception) { emptyList() }
-                        val filteredSM = scrapedSM.filter { it.url.contains("/pelicula/") || it.url.contains("/movies/") || it.url.contains("/peli/") }
-                        val scrapedPP = try { PelisPlusScraper.scrapeList(page = 1) } catch (e: Exception) { emptyList() }
-                        val filteredPP = scrapedPP.filter { it.url.contains("/pelicula/") || it.url.contains("/movies/") || it.url.contains("/peli/") }
-
-                        
-                        val combined = ArrayList<UiChannel>()
-                        filteredSM.forEach {
-                            combined.add(UiChannel(
-                                name = it.title,
-                                groupTitle = "PELICULA",
-                                logoUrl = it.img.ifEmpty { "https://cdn-icons-png.flaticon.com/512/864/864383.png" },
-                                primaryStreamUrl = it.url,
-                                sources = listOf(ChannelSource("BloodersTv", it.url)),
-                                synopsis = "Contenido de BloodersTv (SeriesMetro) disponible directamente.",
-                                rating = "8.8",
-                                year = it.year,
-                                director = "BloodersTv",
-                                actors = "Virtual",
-                                isEmbedText = true,
-                                originalGroup = "BLOODERSTV_CATALOG"
-                            ))
-                        }
-                        filteredPP.forEach {
-                            combined.add(UiChannel(
-                                name = it.title,
-                                groupTitle = "PELICULA",
-                                logoUrl = it.img.ifEmpty { "https://cdn-icons-png.flaticon.com/512/864/864383.png" },
-                                primaryStreamUrl = it.url,
-                                sources = listOf(ChannelSource("Blooders2", it.url)),
-                                synopsis = "Contenido de Blooders2 disponible directamente.",
-                                rating = "8.9",
-                                year = it.year,
-                                director = "Blooders2",
-                                actors = "Virtual",
-                                isEmbedText = true,
-                                originalGroup = "BLOODERSTV_CATALOG"
-                            ))
-                        }
-
-                        _scrapedCatalogItems.value = combined
-                    } else if (category == "KIDS") {
-                        val combined = ArrayList<UiChannel>()
-                        val visitedUrls = HashSet<String>()
-                        val kidsQueries = listOf("Disney", "Pixar", "Minions")
-                        for (term in kidsQueries) {
-                            try {
-                                val results = PelisPlusScraper.scrapeList(query = term).take(10)
-                                results.forEach {
-                                    if (visitedUrls.add(it.url)) {
-                                        combined.add(UiChannel(
-                                            name = it.title,
-                                            groupTitle = "KIDS",
-                                            logoUrl = it.img.ifEmpty { "https://cdn-icons-png.flaticon.com/512/864/864383.png" },
-                                            primaryStreamUrl = it.url,
-                                            sources = listOf(ChannelSource("Blooders2", it.url)),
-                                            synopsis = "Película o serie animada especial para niños y toda la familia.",
-                                            rating = "9.2",
-                                            year = it.year,
-                                            director = "Blooders2 Kids",
-                                            actors = "Infantil",
-                                            isEmbedText = true,
-                                            originalGroup = "BLOODERSTV_CATALOG"
-                                        ))
-                                    }
-                                }
-
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }
-                        _scrapedCatalogItems.value = combined
-                    } else if (category == "ANIME") {
-                        val combined = ArrayList<UiChannel>()
-                        val visitedUrls = HashSet<String>()
-                        val animeQueries = listOf("Dragon Ball", "Naruto", "One Piece")
-                        for (term in animeQueries) {
-                            try {
-                                val results = PelisPlusScraper.scrapeList(query = term).take(10)
-                                results.forEach {
-                                    if (visitedUrls.add(it.url)) {
-                                        combined.add(UiChannel(
-                                            name = it.title,
-                                            groupTitle = "ANIME",
-                                            logoUrl = it.img.ifEmpty { "https://cdn-icons-png.flaticon.com/512/864/864383.png" },
-                                            primaryStreamUrl = it.url,
-                                            sources = listOf(ChannelSource("Blooders2", it.url)),
-                                            synopsis = "Disfruta de tus episodios y películas de anime de culto en Blooders2.",
-                                            rating = "9.5",
-                                            year = it.year,
-                                            director = "Blooders2 Anime",
-                                            actors = "Otaku",
-                                            isEmbedText = true,
-                                            originalGroup = "BLOODERSTV_CATALOG"
-                                        ))
-                                    }
-                                }
-
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }
-                        _scrapedCatalogItems.value = combined
-                    } else if (category == "EXTENSION") {
-                        val scrapedSM = try { SeriesMetroScraper.scrapeSeriesList(page = 1) } catch (e: Exception) { emptyList() }
-                        val scrapedPP = try { PelisPlusScraper.scrapeList(page = 1) } catch (e: Exception) { emptyList() }
-                        
-                        val combined = ArrayList<UiChannel>()
-                        scrapedSM.forEach {
-                            combined.add(UiChannel(
-                                name = it.title,
-                                groupTitle = "EXTENSION",
-                                logoUrl = it.img.ifEmpty { "https://cdn-icons-png.flaticon.com/512/864/864383.png" },
-                                primaryStreamUrl = it.url,
-                                sources = listOf(ChannelSource("BloodersTv", it.url)),
-                                synopsis = "Contenido bajo de demanda de BloodersTv (SeriesMetro).",
-                                rating = "8.8",
-                                year = it.year,
-                                director = "BloodersTv",
-                                actors = "Virtual",
-                                isEmbedText = true,
-                                originalGroup = "BLOODERSTV_CATALOG"
-                            ))
-                        }
-                        scrapedPP.forEach {
-                            combined.add(UiChannel(
-                                name = it.title,
-                                groupTitle = "EXTENSION",
-                                logoUrl = it.img.ifEmpty { "https://cdn-icons-png.flaticon.com/512/864/864383.png" },
-                                primaryStreamUrl = it.url,
-                                sources = listOf(ChannelSource("Blooders2", it.url)),
-                                synopsis = "Contenido de Blooders2 disponible directamente.",
-                                rating = "8.9",
-                                year = it.year,
-                                director = "Blooders2",
-                                actors = "Virtual",
-                                isEmbedText = true,
-                                originalGroup = "BLOODERSTV_CATALOG"
-                            ))
-                        }
-                        _scrapedCatalogItems.value = combined
-                    } else {
-                        _scrapedCatalogItems.value = emptyList()
-                    }
+                    _scrapedCatalogItems.value = scraperRepository.getScrapedItems(query, category)
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    _scrapedCatalogItems.value = emptyList()
                 }
-                Unit
             }
         }
-
-        // The last watched channel is restored automatically as a live preview highlighted on the dashboard.
     }
 
     private fun serializeChannelList(channels: List<UiChannel>): String {
@@ -2015,12 +1295,12 @@ class TvViewModel(
         pushToNavigationHistory()
         _selectedSeason.value = seasonNum
         val epInSeason = _seriesEpisodes.value.find { ch ->
-            val info = com.maratonTv.ui.parseSeriesEpisode(ch)
+            val info = parseSeriesEpisode(ch)
             info != null && info.season == seasonNum
         }
         if (epInSeason != null) {
             _selectedChannel.value = epInSeason
-            val info = com.maratonTv.ui.parseSeriesEpisode(epInSeason)
+            val info = parseSeriesEpisode(epInSeason)
             if (info != null) {
                 _selectedEpisodeNum.value = info.episode
                 _activeStreamUrl.value = epInSeason.primaryStreamUrl
@@ -2050,7 +1330,7 @@ class TvViewModel(
         }
 
         val ep = _seriesEpisodes.value.find { ch ->
-            val info = com.maratonTv.ui.parseSeriesEpisode(ch)
+            val info = parseSeriesEpisode(ch)
             info != null && info.season == _selectedSeason.value && info.episode == episodeNum
         }
         if (ep != null) {
@@ -2063,7 +1343,7 @@ class TvViewModel(
     }
 
     fun parseSeriesEpisode(channel: UiChannel): SeriesEpisodeInfo? {
-        return com.maratonTv.ui.parseSeriesEpisode(channel)
+        return SeriesEpisodeParser.parseSeriesEpisode(channel)
     }
 
     fun toggleBlooderscrapIntegrado() {
@@ -2575,273 +1855,170 @@ class TvViewModel(
     }
 
     fun startExtensionServer() {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            var serverSocket: ServerSocket? = null
-            try {
-                serverSocket = ServerSocket(9999)
-                while (true) {
-                    val socket = serverSocket.accept()
-                    handleSocketInput(socket)
+        extensionServer?.stop()
+        extensionServer = ExtensionServer(
+            onStatusUpdate = { status -> _extensionStatus.value = status },
+            onHeartbeat = { hb -> _lastHeartbeat.value = hb },
+            onDataReceived = { json -> handleScrapedData(json) }
+        )
+        extensionServer?.start()
+    }
+
+    private fun handleScrapedData(jsonObj: JSONObject) {
+        val type = jsonObj.optString("type", "")
+        val title = jsonObj.optString("title", "Blooderscrap")
+        
+        _scrapedType.value = type
+        _scrapedTitle.value = title
+        
+        val newUiChannels = ArrayList<UiChannel>()
+        
+        if (type == "lista") {
+            val itemsArr = jsonObj.optJSONArray("items")
+            if (itemsArr != null) {
+                for (i in 0 until itemsArr.length()) {
+                    val item = itemsArr.optJSONObject(i) ?: continue
+                    val itemTitle = item.optString("title", "")
+                    val itemUrl = item.optString("url", "")
+                    val itemImg = item.optString("img", "")
+                    
+                    newUiChannels.add(
+                        UiChannel(
+                            name = itemTitle,
+                            groupTitle = "EXTENSION",
+                            logoUrl = itemImg,
+                            primaryStreamUrl = itemUrl,
+                            sources = listOf(ChannelSource("Ver en Web / Scraped", itemUrl)),
+                            currentProgram = "Página de Serie",
+                            currentProgramDescription = itemUrl,
+                            rating = "8.2",
+                            year = "2026",
+                            synopsis = "Enlace detectado por BloodersTv. Haz clic para detalles.",
+                            originalGroup = "Serie Buscada",
+                            isEmbedText = true
+                        )
+                    )
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                _extensionStatus.value = "Error: ${e.localizedMessage}"
-            } finally {
-                try { serverSocket?.close() } catch (ex: Exception) {}
             }
+        } else if (type == "serie") {
+            val img = jsonObj.optString("img", "")
+            val desc = jsonObj.optString("desc", "")
+            val capitulosArr = jsonObj.optJSONArray("capitulos")
+            
+            if (capitulosArr != null) {
+                for (i in 0 until capitulosArr.length()) {
+                    val cap = capitulosArr.optJSONObject(i) ?: continue
+                    val capTitle = cap.optString("titulo", "")
+                    val capUrl = cap.optString("url", "")
+                    
+                    newUiChannels.add(
+                        UiChannel(
+                            name = capTitle,
+                            groupTitle = "EXTENSION",
+                            logoUrl = img,
+                            primaryStreamUrl = capUrl,
+                            sources = listOf(ChannelSource("Ver en Web / Scraped", capUrl)),
+                            currentProgram = capTitle,
+                            currentProgramDescription = capUrl,
+                            rating = "8.2",
+                            year = "2026",
+                            synopsis = desc.ifEmpty { "Capítulo detectador por la extensión." },
+                            originalGroup = title,
+                            isEmbedText = true
+                        )
+                    )
+                }
+            }
+        } else if (type == "capitulo") {
+            val embedUrlsArr = jsonObj.optJSONArray("embedUrls")
+            val opcionesArr = jsonObj.optJSONArray("opciones")
+            val trid = jsonObj.optString("trid", "")
+            
+            val sourcesList = ArrayList<ChannelSource>()
+            
+            if (opcionesArr != null && opcionesArr.length() > 0) {
+                for (i in 0 until opcionesArr.length()) {
+                    val opt = opcionesArr.optJSONObject(i) ?: continue
+                    val label = opt.optString("label", "Opción ${i + 1}")
+                    val optIdx = opt.optInt("index", i)
+                    val embedUrl = if (trid.isNotEmpty()) {
+                        "https://www3.seriesmetro.net/?trembed=0&trid=$trid&trtype=${optIdx + 2}"
+                    } else {
+                        ""
+                    }
+                    if (embedUrl.isNotEmpty()) {
+                        sourcesList.add(ChannelSource(label, embedUrl))
+                    }
+                }
+            }
+            
+            if (embedUrlsArr != null) {
+                for (i in 0 until embedUrlsArr.length()) {
+                    val url = embedUrlsArr.optString(i, "")
+                    if (url.isNotEmpty() && !sourcesList.any { it.streamUrl == url }) {
+                        sourcesList.add(ChannelSource("Enlace Encontrado #${i + 1}", url))
+                    }
+                }
+            }
+            
+            if (sourcesList.isEmpty() && trid.isNotEmpty()) {
+                sourcesList.add(ChannelSource("Opción Latino", "https://www3.seriesmetro.net/?trembed=0&trid=$trid&trtype=2"))
+                sourcesList.add(ChannelSource("Opción Castellano", "https://www3.seriesmetro.net/?trembed=0&trid=$trid&trtype=3"))
+                sourcesList.add(ChannelSource("Opción Subtitulado", "https://www3.seriesmetro.net/?trembed=0&trid=$trid&trtype=4"))
+            }
+            
+            val finalSourcesList = sourcesList.filterNot { source ->
+                val cleanName = source.playlistName.lowercase().trim()
+                val cleanUrl = source.streamUrl.lowercase().trim()
+                val isInvalidOpcionNumber = cleanName.matches("""opci[oó]n\s+\d+""".toRegex())
+                val isInvalidFastream = cleanUrl == "https://fastream.to/embed" || cleanUrl == "https://fastream.to/embed/" || cleanUrl.isEmpty()
+                isInvalidOpcionNumber || isInvalidFastream
+            }
+            
+            if (finalSourcesList.isNotEmpty()) {
+                newUiChannels.add(
+                    UiChannel(
+                        name = title,
+                        groupTitle = "EXTENSION",
+                        logoUrl = "",
+                        primaryStreamUrl = finalSourcesList[0].streamUrl,
+                        sources = finalSourcesList,
+                        currentProgram = "Reproducir Capítulo",
+                        currentProgramDescription = "Contenido desde la extensión",
+                        rating = "8.5",
+                        year = "2026",
+                        synopsis = "$title. Enlaces multi-idioma listos para reproducir.",
+                        originalGroup = "Capítulos Directos",
+                        isEmbedText = true
+                    )
+                )
+            }
+        }
+        
+        _scrapedItems.value = newUiChannels
+        
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            _activeCategory.value = "EXTENSION"
+            _currentScreen.value = "MAIN"
         }
     }
 
-    private fun handleSocketInput(socket: Socket) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
-                val out = socket.getOutputStream()
-                
-                var line = reader.readLine() ?: ""
-                if (line.isEmpty()) {
-                    socket.close()
-                    return@launch
-                }
-                
-                val parts = line.split(" ")
-                if (parts.size < 3) {
-                    socket.close()
-                    return@launch
-                }
-                val method = parts[0]
-                val path = parts[1]
-                
-                var contentLength = 0
-                while (true) {
-                    val headerLine = reader.readLine() ?: ""
-                    if (headerLine.isEmpty()) break
-                    if (headerLine.startsWith("Content-Length:", ignoreCase = true)) {
-                        contentLength = headerLine.substring(15).trim().toIntOrNull() ?: 0
-                    }
-                }
-                
-                if (method.equals("OPTIONS", ignoreCase = true)) {
-                    val response = "HTTP/1.1 204 No Content\r\n" +
-                            "Access-Control-Allow-Origin: *\r\n" +
-                            "Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n" +
-                            "Access-Control-Allow-Headers: Content-Type\r\n" +
-                            "\r\n"
-                    out.write(response.toByteArray())
-                    out.flush()
-                    socket.close()
-                    return@launch
-                }
-                
-                if (path.startsWith("/ping") || path.startsWith("/status")) {
-                    _lastHeartbeat.value = System.currentTimeMillis()
-                    _extensionStatus.value = "Activo (Conectado)"
-                    val jsonResponse = "{\"status\":\"ok\",\"app\":\"blooderstv\"}"
-                    val responseBytes = jsonResponse.toByteArray()
-                    val response = "HTTP/1.1 200 OK\r\n" +
-                            "Content-Type: application/json\r\n" +
-                            "Access-Control-Allow-Origin: *\r\n" +
-                            "Content-Length: ${responseBytes.size}\r\n" +
-                            "\r\n"
-                    out.write(response.toByteArray())
-                    out.write(responseBytes)
-                    out.flush()
-                } else if (method.equals("POST", ignoreCase = true) && path.startsWith("/scrap")) {
-                    _lastHeartbeat.value = System.currentTimeMillis()
-                    _extensionStatus.value = "Activo (Datos Recibidos)"
-                    
-                    val bodyChars = CharArray(contentLength)
-                    var totalRead = 0
-                    while (totalRead < contentLength) {
-                        val read = reader.read(bodyChars, totalRead, contentLength - totalRead)
-                        if (read == -1) break
-                        totalRead += read
-                    }
-                    val requestBody = String(bodyChars)
-                    
-                    try {
-                        val jsonObj = JSONObject(requestBody)
-                        val type = jsonObj.optString("type", "")
-                        val title = jsonObj.optString("title", "Blooderscrap")
-                        
-                        _scrapedType.value = type
-                        _scrapedTitle.value = title
-                        
-                        val newUiChannels = ArrayList<UiChannel>()
-                        
-                        if (type == "lista") {
-                            val itemsArr = jsonObj.optJSONArray("items")
-                            if (itemsArr != null) {
-                                for (i in 0 until itemsArr.length()) {
-                                    val item = itemsArr.optJSONObject(i) ?: continue
-                                    val itemTitle = item.optString("title", "")
-                                    val itemUrl = item.optString("url", "")
-                                    val itemImg = item.optString("img", "")
-                                    
-                                    newUiChannels.add(
-                                        UiChannel(
-                                            name = itemTitle,
-                                            groupTitle = "EXTENSION",
-                                            logoUrl = itemImg,
-                                            primaryStreamUrl = itemUrl,
-                                            sources = listOf(ChannelSource("Ver en Web / Scraped", itemUrl)),
-                                            currentProgram = "Página de Serie",
-                                            currentProgramDescription = itemUrl,
-                                            rating = "8.2",
-                                            year = "2026",
-                                            synopsis = "Enlace detectado por BloodersTv. Haz clic para detalles.",
-                                            originalGroup = "Serie Buscada",
-                                            isEmbedText = true
-                                        )
-                                    )
-                                }
-                            }
-                        } else if (type == "serie") {
-                            val img = jsonObj.optString("img", "")
-                            val desc = jsonObj.optString("desc", "")
-                            val capitulosArr = jsonObj.optJSONArray("capitulos")
-                            
-                            if (capitulosArr != null) {
-                                for (i in 0 until capitulosArr.length()) {
-                                    val cap = capitulosArr.optJSONObject(i) ?: continue
-                                    val capTitle = cap.optString("titulo", "")
-                                    val capUrl = cap.optString("url", "")
-                                    
-                                    newUiChannels.add(
-                                        UiChannel(
-                                            name = capTitle,
-                                            groupTitle = "EXTENSION",
-                                            logoUrl = img,
-                                            primaryStreamUrl = capUrl,
-                                            sources = listOf(ChannelSource("Ver en Web / Scraped", capUrl)),
-                                            currentProgram = capTitle,
-                                            currentProgramDescription = capUrl,
-                                            rating = "8.2",
-                                            year = "2026",
-                                            synopsis = desc.ifEmpty { "Capítulo detectador por la extensión." },
-                                            originalGroup = title,
-                                            isEmbedText = true
-                                        )
-                                    )
-                                }
-                            }
-                        } else if (type == "capitulo") {
-                            val embedUrlsArr = jsonObj.optJSONArray("embedUrls")
-                            val opcionesArr = jsonObj.optJSONArray("opciones")
-                            val trid = jsonObj.optString("trid", "")
-                            
-                            val sourcesList = ArrayList<ChannelSource>()
-                            
-                            if (opcionesArr != null && opcionesArr.length() > 0) {
-                                for (i in 0 until opcionesArr.length()) {
-                                    val opt = opcionesArr.optJSONObject(i) ?: continue
-                                    val label = opt.optString("label", "Opción ${i + 1}")
-                                    val optIdx = opt.optInt("index", i)
-                                    val embedUrl = if (trid.isNotEmpty()) {
-                                        "https://www3.seriesmetro.net/?trembed=0&trid=$trid&trtype=${optIdx + 2}"
-                                    } else {
-                                        ""
-                                    }
-                                    if (embedUrl.isNotEmpty()) {
-                                        sourcesList.add(ChannelSource(label, embedUrl))
-                                    }
-                                }
-                            }
-                            
-                            if (embedUrlsArr != null) {
-                                for (i in 0 until embedUrlsArr.length()) {
-                                    val url = embedUrlsArr.optString(i, "")
-                                    if (url.isNotEmpty() && !sourcesList.any { it.streamUrl == url }) {
-                                        sourcesList.add(ChannelSource("Enlace Encontrado #${i + 1}", url))
-                                    }
-                                }
-                            }
-                            
-                            if (sourcesList.isEmpty() && trid.isNotEmpty()) {
-                                sourcesList.add(ChannelSource("Opción Latino", "https://www3.seriesmetro.net/?trembed=0&trid=$trid&trtype=2"))
-                                sourcesList.add(ChannelSource("Opción Castellano", "https://www3.seriesmetro.net/?trembed=0&trid=$trid&trtype=3"))
-                                sourcesList.add(ChannelSource("Opción Subtitulado", "https://www3.seriesmetro.net/?trembed=0&trid=$trid&trtype=4"))
-                            }
-                            
-                            val finalSourcesList = sourcesList.filterNot { source ->
-                                val cleanName = source.playlistName.lowercase().trim()
-                                val cleanUrl = source.streamUrl.lowercase().trim()
-                                val isInvalidOpcionNumber = cleanName.matches("""opci[oó]n\s+\d+""".toRegex())
-                                val isInvalidFastream = cleanUrl == "https://fastream.to/embed" || cleanUrl == "https://fastream.to/embed/" || cleanUrl.isEmpty()
-                                isInvalidOpcionNumber || isInvalidFastream
-                            }
-                            
-                            if (finalSourcesList.isNotEmpty()) {
-                                newUiChannels.add(
-                                    UiChannel(
-                                        name = title,
-                                        groupTitle = "EXTENSION",
-                                        logoUrl = "",
-                                        primaryStreamUrl = finalSourcesList[0].streamUrl,
-                                        sources = finalSourcesList,
-                                        currentProgram = "Reproducir Capítulo",
-                                        currentProgramDescription = "Contenido desde la extensión",
-                                        rating = "8.5",
-                                        year = "2026",
-                                        synopsis = "$title. Enlaces multi-idioma listos para reproducir.",
-                                        originalGroup = "Capítulos Directos",
-                                        isEmbedText = true
-                                    )
-                                )
-                            }
-                        }
-                        
-                        _scrapedItems.value = newUiChannels
-                        
-                        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                            _activeCategory.value = "EXTENSION"
-                            _currentScreen.value = "MAIN"
-                        }
-                        
-                    } catch (ex: Exception) {
-                        ex.printStackTrace()
-                    }
-                    
-                    val jsonResponse = "{\"status\":\"ok\",\"message\":\"scraped_received\"}"
-                    val responseBytes = jsonResponse.toByteArray()
-                    val response = "HTTP/1.1 200 OK\r\n" +
-                            "Content-Type: application/json\r\n" +
-                            "Access-Control-Allow-Origin: *\r\n" +
-                            "Content-Length: ${responseBytes.size}\r\n" +
-                            "\r\n"
-                    out.write(response.toByteArray())
-                    out.write(responseBytes)
-                    out.flush()
-                } else {
-                    val jsonResponse = "{\"status\":\"error\",\"message\":\"not_found\"}"
-                    val responseBytes = jsonResponse.toByteArray()
-                    val response = "HTTP/1.1 404 Not Found\r\n" +
-                            "Content-Type: application/json\r\n" +
-                            "Access-Control-Allow-Origin: *\r\n" +
-                            "Content-Length: ${responseBytes.size}\r\n" +
-                            "\r\n"
-                    out.write(response.toByteArray())
-                    out.write(responseBytes)
-                    out.flush()
-                }
-                
-                socket.close()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                try { socket.close() } catch (ex: Exception) {}
-            }
-        }
+    override fun onCleared() {
+        super.onCleared()
+        extensionServer?.stop()
     }
 
     // Factory Class
     companion object {
         fun provideFactory(
             application: Application,
-            repository: TvRepository
+            repository: TvRepository,
+            metadataRepository: MediaMetadataRepository,
+            scraperRepository: ScraperRepository
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return TvViewModel(application, repository) as T
+                return TvViewModel(application, repository, metadataRepository, scraperRepository) as T
             }
         }
     }

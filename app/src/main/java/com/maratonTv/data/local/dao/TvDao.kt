@@ -1,6 +1,7 @@
-package com.maratonTv.data
+package com.maratonTv.data.local.dao
 
 import androidx.room.*
+import com.maratonTv.data.local.entities.*
 import kotlinx.coroutines.flow.Flow
 
 @Dao

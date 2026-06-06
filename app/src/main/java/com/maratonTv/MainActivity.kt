@@ -5,47 +5,28 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.viewinterop.AndroidView
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import androidx.compose.ui.input.key.*
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Surface
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.border
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.layout.ContentScale
-import com.maratonTv.data.AppDatabase
-import com.maratonTv.data.TvRepository
-import com.maratonTv.ui.TvViewModel
+import com.maratonTv.data.local.AppDatabase
+import com.maratonTv.data.repository.*
+import com.maratonTv.ui.viewmodel.TvViewModel
+import com.maratonTv.data.remote.scrapers.PelisPlusScraper
 import androidx.lifecycle.ViewModelProvider
 import com.maratonTv.ui.screens.*
 import com.maratonTv.ui.theme.MyApplicationTheme
-import com.maratonTv.ui.components.VideoPlayer
+import com.maratonTv.ui.components.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 
@@ -85,17 +66,21 @@ class MainActivity : ComponentActivity() {
         
         // Initialize Repository
         val repository = TvRepository(tvDao, this)
+        val metadataRepository = MediaMetadataRepository(repository, repository.okHttpClient)
+        val scraperRepository = ScraperRepository()
         
         // Initialize ViewModel using proper ViewModelProvider storing the instance through recreation
         viewModel = ViewModelProvider(
             this,
             TvViewModel.provideFactory(
                 application = this.application,
-                repository = repository
+                repository = repository,
+                metadataRepository = metadataRepository,
+                scraperRepository = scraperRepository
             )
         )[TvViewModel::class.java]
 
-        com.maratonTv.data.PelisPlusScraper.appContext = this.applicationContext
+        PelisPlusScraper.appContext = this.applicationContext
 
         enableEdgeToEdge()
         
@@ -109,19 +94,19 @@ class MainActivity : ComponentActivity() {
                     val playbackMsg by viewModel.playbackMessage.collectAsState()
                     val trailerUrl by viewModel.activeTrailerUrl.collectAsState()
 
-                    androidx.compose.runtime.LaunchedEffect(playbackMsg) {
+                    LaunchedEffect(playbackMsg) {
                         playbackMsg?.let { msg ->
-                            android.widget.Toast.makeText(this@MainActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+                            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
                             viewModel.clearPlaybackMessage()
                         }
                     }
 
                     val isPlayerMaximized by viewModel.isPlayerMaximized.collectAsState()
-                    var showTelegramBanner by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
-                    var lastBackPressTime by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+                    var showTelegramBanner by remember { mutableStateOf(true) }
+                    var lastBackPressTime by remember { mutableLongStateOf(0L) }
 
                     // Intercept Back Button / Back Gesture to navigate backwards in the UI instead of exiting the app
-                    androidx.activity.compose.BackHandler(enabled = true) {
+                    BackHandler(enabled = true) {
                         if (showTelegramBanner) {
                             showTelegramBanner = false
                         } else if (trailerUrl != null) {
@@ -147,7 +132,7 @@ class MainActivity : ComponentActivity() {
                                             this@MainActivity.finish()
                                         } else {
                                             lastBackPressTime = currentTime
-                                            android.widget.Toast.makeText(this@MainActivity, "Presiona atrás de nuevo para salir", android.widget.Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(this@MainActivity, "Presiona atrás de nuevo para salir", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 }
@@ -201,205 +186,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@androidx.compose.runtime.Composable
-fun YoutubeTrailerPlayer(
-    trailerId: String,
-    onClose: () -> Unit
-) {
-    val focusRequester = androidx.compose.runtime.remember { FocusRequester() }
-
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .focusRequester(focusRequester)
-            .focusable()
-            .onKeyEvent { _ ->
-                onClose()
-                true
-            }
-            .clickable {
-                onClose()
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        AndroidView(
-            factory = { ctx ->
-                val webView = android.webkit.WebView(ctx).apply {
-                    settings.javaScriptEnabled = true
-                    settings.mediaPlaybackRequiresUserGesture = false
-                    settings.domStorageEnabled = true
-                    settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-                    webViewClient = android.webkit.WebViewClient()
-                    layoutParams = FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                }
-                android.webkit.CookieManager.getInstance().apply {
-                    setAcceptCookie(true)
-                    setAcceptThirdPartyCookies(webView, true)
-                }
-                webView
-            },
-            update = { webView ->
-                val currentTag = webView.tag as? String
-                if (currentTag != trailerId) {
-                    webView.tag = trailerId
-                    val html = """
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                            <style>
-                                body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; }
-                                iframe { width: 100%; height: 100%; border: none; }
-                            </style>
-                        </head>
-                        <body>
-                            <iframe id="player" src="https://www.youtube.com/embed/$trailerId?autoplay=1&mute=0&controls=1&playsinline=1&enablejsapi=1&origin=https://www.youtube.com" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-                        </body>
-                        </html>
-                    """.trimIndent()
-                    webView.loadDataWithBaseURL("https://www.youtube.com/", html, "text/html", "UTF-8", null)
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Transparent)
-                .clickable { onClose() }
-        )
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(24.dp)
-                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                .padding(horizontal = 14.dp, vertical = 8.dp)
-        ) {
-            Text(
-                text = "CERRAR TRÁILER: PRESIONE CUALQUIER BOTÓN O CLIC EN PANTALLA",
-                color = Color.White,
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-            )
-        }
-    }
-}
-
-@androidx.compose.runtime.Composable
-fun TelegramBannerPromo(
-    onDismiss: () -> Unit
-) {
-    var secondsLeft by androidx.compose.runtime.remember { mutableIntStateOf(5) }
-    val context = androidx.compose.ui.platform.LocalContext.current
-    
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        while (secondsLeft > 0) {
-            kotlinx.coroutines.delay(kotlin.time.Duration.parse("1s"))
-            secondsLeft--
-        }
-        onDismiss()
-    }
-
-    // Capture keys to dismiss banner early when using DPAD controls
-    val focusRequester = androidx.compose.runtime.remember { FocusRequester() }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.85f))
-            .focusRequester(focusRequester)
-            .focusable()
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.type == KeyEventType.KeyDown) {
-                    onDismiss()
-                    true
-                } else false
-            }
-            .clickable { onDismiss() },
-        contentAlignment = Alignment.Center
-    ) {
-        val calculatedSize = if (this.maxWidth < this.maxHeight) this.maxWidth * 0.85f else this.maxHeight * 0.85f
-
-        // Main container card matching the 1:1 format of the generated asset
-        Box(
-            modifier = Modifier
-                .size(calculatedSize)
-                .clip(RoundedCornerShape(24.dp))
-                .border(3.dp, Color(0xFF38BDF8), RoundedCornerShape(24.dp))
-                .background(Color(0xFF0F172A))
-                .clickable {
-                    try {
-                        val intent = android.content.Intent(
-                            android.content.Intent.ACTION_VIEW,
-                            "https://t.me/BloodersTv".toUri()
-                        )
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        // Fallback
-                    }
-                }
-        ) {
-            // Render the authentic high-resolution Telegram promotional image
-            Image(
-                painter = painterResource(id = R.drawable.img_telegram_banner_1780320162432),
-                contentDescription = "¡Únete a Telegram BloodersTV!",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
-
-            // Overlaid Countdown Bubble
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.Black.copy(alpha = 0.75f))
-                    .border(1.5.dp, Color(0xFFEF4444), RoundedCornerShape(50))
-                    .clickable { 
-                        onDismiss()
-                    }
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = "Cerrar (${secondsLeft}s) ✕",
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            }
-
-            // Click instructions overlay bar at the bottom center
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 12.dp)
-                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = "CLIC PARA UNIRSE / PRESIONE CUALQUIER BOTÓN PARA CERRAR",
-                    color = Color.White.copy(alpha = 0.9f),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    )
-                )
             }
         }
     }

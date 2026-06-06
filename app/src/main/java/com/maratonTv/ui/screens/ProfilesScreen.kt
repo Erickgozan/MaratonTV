@@ -36,8 +36,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import androidx.compose.ui.window.Dialog
 import com.maratonTv.R
-import com.maratonTv.data.Profile
-import com.maratonTv.ui.TvViewModel
+import com.maratonTv.data.local.entities.Profile
+import com.maratonTv.ui.viewmodel.TvViewModel
 import com.maratonTv.ui.theme.BloodRed
 import com.maratonTv.ui.theme.CardSlate
 import com.maratonTv.ui.theme.DarkCharcoal

@@ -33,7 +33,8 @@ import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
-import com.maratonTv.ui.TvViewModel
+import com.maratonTv.ui.viewmodel.TvViewModel
+import com.maratonTv.data.remote.scrapers.PelisPlusScraper
 import com.maratonTv.ui.theme.BloodRed
 import com.maratonTv.ui.theme.CardSlate
 import com.maratonTv.ui.theme.DarkCharcoal
@@ -1885,10 +1886,10 @@ fun SettingsScreen(viewModel: TvViewModel) {
                                         coroutineScope.launch {
                                             try {
                                                 val items = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                                    com.maratonTv.data.PelisPlusScraper.scrapeList()
+                                                    PelisPlusScraper.scrapeList()
                                                 }
                                                 if (items.isNotEmpty()) {
-                                                    testStatus = "¡CONECTADO Y FUNCIONANDO! (Dominio activo: ${com.maratonTv.data.PelisPlusScraper.CURRENT_WORKING_HOST})"
+                                                    testStatus = "¡CONECTADO Y FUNCIONANDO! (Dominio activo: ${PelisPlusScraper.CURRENT_WORKING_HOST})"
                                                     testResults = items.take(4).map { "${it.title} (${it.year})" }
                                                 } else {
                                                     testStatus = "Error: Respuesta vacía o servidor fuera de línea."

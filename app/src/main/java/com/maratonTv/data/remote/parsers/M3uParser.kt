@@ -1,5 +1,6 @@
-package com.maratonTv.data
+package com.maratonTv.data.remote.parsers
 
+import com.maratonTv.data.local.entities.DbChannel
 import java.io.BufferedReader
 import java.io.StringReader
 import java.io.Reader

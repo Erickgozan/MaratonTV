@@ -1,4 +1,7 @@
-package com.maratonTv.data
+package com.maratonTv.data.remote.scrapers
+
+import com.maratonTv.data.model.ChannelSource
+import com.maratonTv.data.model.UiChannel
 
 object StaticTvChannels {
     private val DEPORTES_LIST = listOf(

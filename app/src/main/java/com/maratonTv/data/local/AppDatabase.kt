@@ -1,9 +1,11 @@
-package com.maratonTv.data
+package com.maratonTv.data.local
 
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.maratonTv.data.local.dao.TvDao
+import com.maratonTv.data.local.entities.*
 
 @Database(
     entities = [Profile::class, Playlist::class, DbChannel::class, Favorite::class, EpgProgram::class, PlaybackProgress::class, DbCachedMetadata::class],

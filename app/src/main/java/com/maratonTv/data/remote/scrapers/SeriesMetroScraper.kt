@@ -1,4 +1,4 @@
-package com.maratonTv.data
+package com.maratonTv.data.remote.scrapers
 
 import android.util.Log
 import okhttp3.OkHttpClient
@@ -448,4 +448,3 @@ object SeriesMetroScraper {
         return trembedUrl
     }
 }
-

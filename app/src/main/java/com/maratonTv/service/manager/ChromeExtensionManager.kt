@@ -1,4 +1,4 @@
-package com.maratonTv.data
+package com.maratonTv.service.manager
 
 import android.content.Context
 import android.util.Log

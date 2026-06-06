@@ -23,8 +23,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
 import coil.compose.AsyncImage
-import com.maratonTv.data.UiChannel
-import com.maratonTv.ui.TvViewModel
+import com.maratonTv.data.model.UiChannel
+import com.maratonTv.ui.viewmodel.TvViewModel
 import com.maratonTv.ui.theme.BloodRed
 import com.maratonTv.ui.theme.CardSlate
 import com.maratonTv.ui.theme.DarkCharcoal

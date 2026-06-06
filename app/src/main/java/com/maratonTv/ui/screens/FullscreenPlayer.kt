@@ -34,7 +34,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
-import com.maratonTv.ui.TvViewModel
+import com.maratonTv.data.local.entities.PlaybackProgress
+import com.maratonTv.ui.viewmodel.TvViewModel
 import com.maratonTv.ui.components.VideoPlayer
 import com.maratonTv.ui.theme.BloodRed
 import com.maratonTv.ui.theme.CardSlate
@@ -108,7 +109,7 @@ fun FullscreenPlayer(
     var totalDuration by remember { mutableStateOf(0L) }
     var isVideoPlaying by remember { mutableStateOf(false) }
 
-    var savedProgressState by remember(activeStreamUrl) { mutableStateOf<com.maratonTv.data.PlaybackProgress?>(null) }
+    var savedProgressState by remember(activeStreamUrl) { mutableStateOf<PlaybackProgress?>(null) }
     var hasRestoredProgress by remember(activeStreamUrl) { mutableStateOf(false) }
     var showRestoredToast by remember(activeStreamUrl) { mutableStateOf(false) }
 

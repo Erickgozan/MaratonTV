@@ -1,6 +1,10 @@
-package com.maratonTv.data
+package com.maratonTv.data.repository
 
 import android.content.Context
+import com.maratonTv.data.local.dao.TvDao
+import com.maratonTv.data.local.entities.*
+import com.maratonTv.data.model.*
+import com.maratonTv.data.remote.parsers.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
@@ -10,35 +14,6 @@ import java.io.IOException
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import javax.net.ssl.SSLContext
-
-data class ChannelSource(
-    val playlistName: String,
-    val streamUrl: String
-)
-
-data class UiChannel(
-    val name: String,
-    val groupTitle: String,
-    val logoUrl: String,
-    val primaryStreamUrl: String,
-    val sources: List<ChannelSource>,
-    val currentProgram: String? = null,
-    val currentProgramDescription: String? = null,
-    val startEndText: String? = null,
-    val programProgress: Float = 0f, // 0.0 to 1.0
-    val isFavorite: Boolean = false,
-    val rating: String = "8.2",
-    val year: String = "2026",
-    val director: String = "Blooders Creator",
-    val actors: String = "Zazie Beetz, Patricia Arquette, Tom Clancy",
-    val synopsis: String = "Un contenido de entretenimiento fluido optimizado para BloodersTV sin retrasos con transmisión en alta fidelidad y controles de mandos dedicados.",
-    val originalGroup: String = "TV",
-    val isEmbedText: Boolean = false,
-    val adBlockerEnabled: Boolean = false
-)
-
-private val staticSeriesRegex = "(?i)(?:S[0-9]+|T[0-9]+|E[0-9]+|TEMPORADA\\s*[0-9]+|CAPITULO\\s*[0-9]+|[0-9]+x[0-9]+|CAP\\.?\\s*[0-9]+|EP\\.?\\s*[0-9]+)".toRegex()
-private val staticYearRegex = "(?i)\\b(20[0-2][0-9]|19[8-9][0-9])\\b".toRegex()
 
 class TvRepository(
     private val tvDao: TvDao,
@@ -228,6 +203,9 @@ class TvRepository(
     }
 
     private fun mapGroupToCategory(group: String, name: String): String {
+        val staticSeriesRegex = "(?i)(?:S[0-9]+|T[0-9]+|E[0-9]+|TEMPORADA\\s*[0-9]+|CAPITULO\\s*[0-9]+|[0-9]+x[0-9]+|CAP\\.?\\s*[0-9]+|EP\\.?\\s*[0-9]+)".toRegex()
+        val staticYearRegex = "(?i)\\b(20[0-2][0-9]|19[8-9][0-9])\\b".toRegex()
+        
         val upperGroup = group.uppercase()
         val upperName = name.uppercase()
 
@@ -432,25 +410,6 @@ class TvRepository(
     }
 
     // --- Playlist & parsing Management ---
-    private fun extractXtreamCredentials(url: String): Triple<String, String, String>? {
-        return try {
-            if (!url.contains("username=") || !url.contains("password=")) null
-            else {
-                val uri = android.net.Uri.parse(url)
-                val username = uri.getQueryParameter("username") ?: return null
-                val password = uri.getQueryParameter("password") ?: return null
-                val scheme = uri.scheme ?: "http"
-                val host = uri.host ?: return null
-                val port = uri.port
-                val portString = if (port != -1) ":$port" else ""
-                val server = "$scheme://$host$portString"
-                Triple(server, username, password)
-            }
-        } catch (e: Exception) {
-            null
-        }
-    }
-
     suspend fun addPlaylist(name: String, url: String, classification: String = "GENERAL", playbackMode: String = "AUTOMATIC") = withContext(Dispatchers.IO) {
         // Direct M3U url download. Credentials verification is performed directly from the response of the main get.php / playlist url.
         val playlistId = tvDao.insertPlaylist(Playlist(name = name, url = url, classification = classification, playbackMode = playbackMode)).toInt()
@@ -766,14 +725,14 @@ class TvRepository(
                 streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
                 name = "10 AXN HD",
                 groupTitle = "TV",
-                logoUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=150",
+                logoUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=250",
                 playlistId = playlistId
             ),
             DbChannel(
                 streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4",
                 name = "10 AXN HD", // Source 2 for AXN HD to showcase multi links
                 groupTitle = "TV",
-                logoUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=150",
+                logoUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=250",
                 playlistId = playlistId
             ),
             DbChannel(
