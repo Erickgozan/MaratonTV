@@ -363,30 +363,19 @@ fun VideoPlayer(
         }
     }
 
-    // Initialize ExoPlayer once per Composable lifecycle, reactive to codecs pack and VLC utility installation toggles
-    val exoPlayer = remember(context, codecsPackInstalled, libVlcInstalled, audioFixChannels) {
+    // Reinicio Limpio Absoluto al cambiar de URL (Reinicializa motor multimedia desde cero)
+    val exoPlayer = remember(streamUrl, codecsPackInstalled, libVlcInstalled, audioFixChannels) {
         disableSSLCertificateChecking()
 
         val baseHttpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(15000)
-            .setDefaultRequestProperties(mapOf(
-                "Accept" to "*/*",
-                "Icy-MetaData" to "1",
-                "Connection" to "keep-alive"
-            ))
+            .setConnectTimeoutMs(10000)
+            .setReadTimeoutMs(10000)
 
-        // DefaultDataSource covers local file URIs, content URIs, assets, etc.
         val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(context, baseHttpDataSourceFactory)
-
-        // Force enable TS / MPEG transport stream custom extraction
         val extractorsFactory = androidx.media3.extractor.DefaultExtractorsFactory().apply {
-            setTsExtractorFlags(25) // FLAG_ALLOW_NON_KEYFRAME_SAMPLING = 1, FLAG_DETECT_ACCESS_UNITS = 8, FLAG_ENABLE_HDMV_DTS_AUDIO_STREAMS = 16
-            setAdtsExtractorFlags(1) // Constant bitrate seeking
-            setMp3ExtractorFlags(1) // Indexing for seeking in MP3 stream audio
-            setMp4ExtractorFlags(1) // Workaround ignore edit lists of files
+            setTsExtractorFlags(25)
         }
 
         val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(context, extractorsFactory)
@@ -397,14 +386,16 @@ fun VideoPlayer(
             .setLoadControl(loadControl)
             .build().apply {
                 playWhenReady = true
-                repeatMode = Player.REPEAT_MODE_ONE
             }
     }
 
-    // Handle overall ExoPlayer lifecycle disposal
+    // Handle overall ExoPlayer lifecycle disposal (Apagado en cadena estricto)
     DisposableEffect(exoPlayer) {
         onPlayerCreated?.invoke(exoPlayer)
         onDispose {
+            Log.d("VideoPlayer", "Ejecutando Destrucción Absoluta del Reproductor...")
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
             exoPlayer.release()
         }
     }
@@ -1261,43 +1252,28 @@ class MpegL2SoftwareAudioRenderer(
         appendStream.clear()
         
         decoderThread = Thread({
-            Log.d("MpegL2Renderer", "JLayer decodificación iniciada en hilo secundario.")
+            Log.d("MpegL2Renderer", "JLayer decodificación iniciada.")
             val bitstream = javazoom.jl.decoder.Bitstream(appendStream)
             val decoder = javazoom.jl.decoder.Decoder()
             try {
                 while (!Thread.currentThread().isInterrupted && !isEndedValue) {
                     try {
                         val header = bitstream.readFrame() ?: break
-                        try {
-                            val sampleBuffer = decoder.decodeFrame(header, bitstream) as? javazoom.jl.decoder.SampleBuffer
-                            if (sampleBuffer != null) {
-                                val pcm = sampleBuffer.buffer
-                                val pcmLength = sampleBuffer.bufferLength
-                                if (pcmLength > 0) {
-                                    writeToAudioTrack(pcm, pcmLength, sampleBuffer.sampleFrequency, sampleBuffer.channelCount)
-                                }
-                            }
-                        } catch (e: Exception) {
-                            Log.e("MpegL2Renderer", "Error decoding frame: ${e.localizedMessage}")
-                        } finally {
-                            bitstream.closeFrame()
+                        val sampleBuffer = decoder.decodeFrame(header, bitstream) as? javazoom.jl.decoder.SampleBuffer
+                        if (sampleBuffer != null) {
+                            writeToAudioTrack(sampleBuffer.buffer, sampleBuffer.bufferLength, sampleBuffer.sampleFrequency, sampleBuffer.channelCount)
                         }
+                        bitstream.closeFrame()
                     } catch (e: Exception) {
-                        Log.e("MpegL2Renderer", "Error reading bitstream frame: ${e.localizedMessage}")
-                        // Evitar bucles infinitos en errores de sincronización de bits con un pequeño retraso
-                        Thread.sleep(15)
+                        if (isEndedValue) break
+                        Thread.sleep(10)
                     }
                 }
-            } catch (e: InterruptedException) {
-                Log.d("MpegL2Renderer", "Hilo de reproducción de audio interrumpido normalmente.")
             } catch (e: Exception) {
-                Log.e("MpegL2Renderer", "Error fatal en hilo de descodificador: ${e.localizedMessage}")
+                Log.e("MpegL2Renderer", "Error decoder: ${e.message}")
             } finally {
-                try {
-                    bitstream.close()
-                } catch (e: Exception) {}
+                try { bitstream.close() } catch (e: Exception) {}
                 releaseAudioTrack()
-                Log.d("MpegL2Renderer", "Hilo de reproducción de audio finalizado.")
             }
         }, "MpegL2DecoderThread").apply {
             priority = Thread.MAX_PRIORITY
@@ -1307,26 +1283,42 @@ class MpegL2SoftwareAudioRenderer(
 
     @Synchronized
     private fun stopDecoderThread() {
-        decoderThread?.interrupt()
-        decoderThread = null
-        appendStream.clear()
-        releaseAudioTrack()
+        try {
+            isEndedValue = true
+            appendStream.isFinished = true
+            appendStream.clear() // Desbloquea hilos esperando en lock.wait()
+            
+            decoderThread?.apply {
+                interrupt()
+                // No usamos join() para evitar bloquear el hilo principal de UI, 
+                // pero marcamos el thread para morir inmediatamente.
+            }
+            decoderThread = null
+            releaseAudioTrack()
+            Log.d("MpegL2Renderer", "Hilos y AudioTrack liberados con éxito.")
+        } catch (e: Exception) {
+            Log.e("MpegL2Renderer", "Error en parada forzada: ${e.message}")
+        }
     }
 
     private fun releaseAudioTrack() {
-        try {
-            audioTrack?.apply {
-                if (state == android.media.AudioTrack.STATE_INITIALIZED) {
-                    stop()
+        synchronized(this) {
+            try {
+                audioTrack?.apply {
+                    if (state == android.media.AudioTrack.STATE_INITIALIZED) {
+                        pause()
+                        flush()
+                        stop()
+                    }
+                    release()
                 }
-                release()
+            } catch (e: Exception) {
+                Log.e("MpegL2Renderer", "Error liberando AudioTrack: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.e("MpegL2Renderer", "Error releasing AudioTrack: ${e.message}")
+            audioTrack = null
+            currentSampleRate = 0
+            currentChannels = 0
         }
-        audioTrack = null
-        currentSampleRate = 0
-        currentChannels = 0
     }
 
     private fun writeToAudioTrack(pcm: ShortArray, length: Int, sampleRate: Int, channels: Int) {

@@ -99,6 +99,9 @@ class TvViewModel(
     private val _activeCategory = MutableStateFlow("TV")
     val activeCategory: StateFlow<String> = _activeCategory.asStateFlow()
 
+    private val _selectedTvSubCategory = MutableStateFlow("TODOS")
+    val selectedTvSubCategory: StateFlow<String> = _selectedTvSubCategory.asStateFlow()
+
     // Global Search Query (can be typed or filled via voice search)
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -152,14 +155,14 @@ class TvViewModel(
     private val _chromeExtensions = MutableStateFlow<List<ChromeExtension>>(emptyList())
     val chromeExtensions: StateFlow<List<ChromeExtension>> = _chromeExtensions.asStateFlow()
 
-    // Filtered Channels for the UI based on Active Category AND Search Query
     val filteredChannels: StateFlow<List<UiChannel>> = combine(
         allChannels,
         _activeCategory,
         _searchQuery,
         _watchHistory,
         _scrapedItems,
-        _scrapedCatalogItems
+        _scrapedCatalogItems,
+        _selectedTvSubCategory
     ) { flowArray ->
         val channels = flowArray[0] as List<UiChannel>
         val category = flowArray[1] as String
@@ -167,18 +170,30 @@ class TvViewModel(
         val historyChannels = flowArray[3] as List<UiChannel>
         val extensionItems = flowArray[4] as List<UiChannel>
         val localScrapedCatalog = flowArray[5] as List<UiChannel>
+        val tvSubCategory = flowArray[6] as String
 
         val filtered = if (query.isNotEmpty()) {
             val dbMatches = channels.filter { 
-                it.name.contains(query, ignoreCase = true) ||
-                it.groupTitle.contains(query, ignoreCase = true) ||
-                (it.currentProgram ?: "").contains(query, ignoreCase = true)
+                val matchesQuery = it.name.contains(query, ignoreCase = true) ||
+                                  it.groupTitle.contains(query, ignoreCase = true) ||
+                                  (it.currentProgram ?: "").contains(query, ignoreCase = true)
+                
+                // Si estamos en la sección TV, filtrar que sea TV y respete la subcategoría si no es TODOS
+                if (category == "TV") {
+                    matchesQuery && it.groupTitle == "TV" && (tvSubCategory == "TODOS" || matchesTvSubCategory(it, tvSubCategory))
+                } else {
+                    matchesQuery
+                }
             }
             val extMatches = extensionItems.filter {
                 it.name.contains(query, ignoreCase = true) ||
                 it.groupTitle.contains(query, ignoreCase = true)
             }
             dbMatches + extMatches + localScrapedCatalog
+        } else if (category == "TV") {
+            channels.filter { 
+                it.groupTitle == "TV" && (tvSubCategory == "TODOS" || matchesTvSubCategory(it, tvSubCategory))
+            }
         } else if (category == "EXTENSION") {
             extensionItems + localScrapedCatalog
         } else if (category == "HISTORIAL") {
@@ -1289,6 +1304,11 @@ class TvViewModel(
     fun selectCategory(category: String) {
         _activeCategory.value = category
         _searchQuery.value = "" // Clear query when changing categories to restore dynamic list
+        _selectedTvSubCategory.value = "TODOS" // Reset TV subcategory
+    }
+
+    fun selectTvSubCategory(subCategory: String) {
+        _selectedTvSubCategory.value = subCategory
     }
 
     fun selectSeason(seasonNum: Int) {
@@ -2006,6 +2026,54 @@ class TvViewModel(
     override fun onCleared() {
         super.onCleared()
         extensionServer?.stop()
+    }
+
+    private fun matchesTvSubCategory(channel: UiChannel, subCategory: String): Boolean {
+        val group = channel.originalGroup.uppercase()
+        val name = channel.name.uppercase()
+        
+        return when (subCategory) {
+            "DEPORTES" -> {
+                val keywords = listOf(
+                    "DEPORTE", "SPORT", "ESPN", "FOX S", "TYC", "WIN", "BEIN", "TUDN", "GOL", "NBA", "NFL", "MLB", 
+                    "F1", "LIGA", "DIRECTV S", "MOVISTAR D", "DSports", "FIGHT", "MATCH", "GOLF", "TENIS", "SURF"
+                )
+                keywords.any { group.contains(it.uppercase()) || name.contains(it.uppercase()) }
+            }
+            "CINE / PELÍCULAS" -> {
+                val keywords = listOf(
+                    "CINE", "PELICULA", "MOVIE", "HBO", "STAR", "CINEMAX", "TNT", "AMC", "WARNER", "SONY", "FX", 
+                    "GOLDEN", "STUDIO", "FILM", "PARAMOUNT", "MAX", "A&E", "AXN", "HOLLYWOOD", "HALLMARK", "CANNAL"
+                )
+                keywords.any { group.contains(it.uppercase()) || name.contains(it.uppercase()) }
+            }
+            "DOCUMENTALES" -> {
+                val keywords = listOf(
+                    "DOCUMENTAL", "CULTURA", "DISCOVERY", "NAT GEO", "HISTORY", "ANIMAL PLANET", "GOURMET", 
+                    "TRAVEL", "VIAJAR", "ID", "TLC", "HGTV", "WILD", "SCIENCE", "CIENCIA", "GEO"
+                )
+                keywords.any { group.contains(it.uppercase()) || name.contains(it.uppercase()) }
+            }
+            "TV ABIERTA" -> {
+                val keywords = listOf(
+                    "ABIERTA", "NACIONAL", "LOCAL", "CANAL", "AZTECA", "TELEVISA", "UNIVISION", "TELEMUNDO", 
+                    "CARACOL", "RCN", "GALA", "ESTRELLAS", "TVN", "LATINA", "AMERICA", "EL TRECE", "TELEFE", 
+                    "ANTENA 3", "LA SEXTA", "TELECINCO"
+                )
+                // Verificamos que sea un canal generalista y NO pertenezca a categorías específicas
+                val isGeneral = keywords.any { group.contains(it.uppercase()) || name.contains(it.uppercase()) }
+                val isNotSpecialized = !name.contains("CINE") && !name.contains("DEPORTE") && !name.contains("NEWS")
+                isGeneral && isNotSpecialized
+            }
+            "NOTICIAS" -> {
+                val keywords = listOf(
+                    "NOTICIA", "NEWS", "CNN", "BBC", "RT", "EURONEWS", "MILENIO", "FORO", "NTN24", "BLOOMBERG", 
+                    "PRENSA", "INFO", "C5N", "TN", "A24", "TELESUR", "DW"
+                )
+                keywords.any { group.contains(it.uppercase()) || name.contains(it.uppercase()) }
+            }
+            else -> false
+        }
     }
 
     // Factory Class

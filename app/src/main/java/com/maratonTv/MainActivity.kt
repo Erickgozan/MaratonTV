@@ -29,6 +29,7 @@ import com.maratonTv.ui.theme.MyApplicationTheme
 import com.maratonTv.ui.components.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import com.maratonTv.ui.utils.isAndroidTv
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: TvViewModel
@@ -36,7 +37,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Configure Coil with customized persistent disk & memory cache, ignoring short-lived HTTP expire rules to reuse assets extensively
         val imageLoader = coil.ImageLoader.Builder(this)
             .memoryCache {
                 coil.memory.MemoryCache.Builder(this)
@@ -53,23 +53,12 @@ class MainActivity : ComponentActivity() {
             .build()
         coil.Coil.setImageLoader(imageLoader)
         
-        // Force landscape orientation regardless of the device with a fallback safety check
-        try {
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        
-        // Initialize Room Database
         val database = AppDatabase.getDatabase(this)
         val tvDao = database.tvDao()
-        
-        // Initialize Repository
         val repository = TvRepository(tvDao, this)
         val metadataRepository = MediaMetadataRepository(repository, repository.okHttpClient)
         val scraperRepository = ScraperRepository()
         
-        // Initialize ViewModel using proper ViewModelProvider storing the instance through recreation
         viewModel = ViewModelProvider(
             this,
             TvViewModel.provideFactory(
@@ -86,6 +75,21 @@ class MainActivity : ComponentActivity() {
         
         setContent {
             MyApplicationTheme {
+                val isTv = isAndroidTv()
+                val isPlayerMaximized by viewModel.isPlayerMaximized.collectAsState()
+                
+                LaunchedEffect(isPlayerMaximized, isTv) {
+                    if (!isTv) {
+                        requestedOrientation = if (isPlayerMaximized) {
+                            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                        } else {
+                            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        }
+                    } else {
+                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                    }
+                }
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = Color.Black
@@ -101,11 +105,9 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    val isPlayerMaximized by viewModel.isPlayerMaximized.collectAsState()
                     var showTelegramBanner by remember { mutableStateOf(true) }
                     var lastBackPressTime by remember { mutableLongStateOf(0L) }
 
-                    // Intercept Back Button / Back Gesture to navigate backwards in the UI instead of exiting the app
                     BackHandler(enabled = true) {
                         if (showTelegramBanner) {
                             showTelegramBanner = false
@@ -140,48 +142,50 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        when (currentScreen) {
-                            "PROFILES" -> ProfilesScreen(viewModel = viewModel)
-                            "MAIN" -> MainTvDashboard(viewModel = viewModel)
-                            "DETAILS" -> MovieDetailsScreen(viewModel = viewModel)
-                            "PLAYER" -> FullscreenPlayer(viewModel = viewModel)
-                            "SETTINGS" -> SettingsScreen(viewModel = viewModel)
-                            else -> ProfilesScreen(viewModel = viewModel)
-                        }
+                    AppNavigationWrapper(viewModel = viewModel) { padding ->
+                        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                            when (currentScreen) {
+                                "PROFILES" -> ProfilesScreen(viewModel = viewModel)
+                                "MAIN" -> MainTvDashboard(viewModel = viewModel)
+                                "DETAILS" -> MovieDetailsScreen(viewModel = viewModel)
+                                "PLAYER" -> FullscreenPlayer(viewModel = viewModel)
+                                "SETTINGS" -> SettingsScreen(viewModel = viewModel)
+                                else -> ProfilesScreen(viewModel = viewModel)
+                            }
 
-                        if (showTelegramBanner) {
-                            TelegramBannerPromo(onDismiss = { showTelegramBanner = false })
-                        }
+                            if (showTelegramBanner) {
+                                TelegramBannerPromo(onDismiss = { showTelegramBanner = false })
+                            }
 
-                        val isImdbTrailerActive by viewModel.isImdbTrailerActive.collectAsState()
-                        trailerUrl?.let { url ->
-                            if (isImdbTrailerActive) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black)
-                                        .clickable { viewModel.closeTrailer() },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    VideoPlayer(
-                                        streamUrl = url,
-                                        modifier = Modifier.fillMaxSize(),
-                                        showController = false
-                                    )
-                                    Button(
-                                        onClick = { viewModel.closeTrailer() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.6f)),
-                                        modifier = Modifier.align(Alignment.TopEnd).padding(24.dp)
+                            val isImdbTrailerActive by viewModel.isImdbTrailerActive.collectAsState()
+                            trailerUrl?.let { url ->
+                                if (isImdbTrailerActive) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black)
+                                            .clickable { viewModel.closeTrailer() },
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Text("Cerrar Tráiler")
+                                        VideoPlayer(
+                                            streamUrl = url,
+                                            modifier = Modifier.fillMaxSize(),
+                                            showController = false
+                                        )
+                                        Button(
+                                            onClick = { viewModel.closeTrailer() },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.6f)),
+                                            modifier = Modifier.align(Alignment.TopEnd).padding(24.dp)
+                                        ) {
+                                            Text("Cerrar Tráiler")
+                                        }
                                     }
+                                } else {
+                                    YoutubeTrailerPlayer(
+                                        trailerId = url,
+                                        onClose = { viewModel.closeTrailer() }
+                                    )
                                 }
-                            } else {
-                                YoutubeTrailerPlayer(
-                                    trailerId = url,
-                                    onClose = { viewModel.closeTrailer() }
-                                )
                             }
                         }
                     }
